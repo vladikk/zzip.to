@@ -43,3 +43,25 @@ This file contains critical constraints and non-obvious information discovered d
 [KVS-POPULATION] populate-kvs.sh requires jq for JSON parsing and updates KVS entries sequentially, fetching/updating ETag between each operation to handle optimistic concurrency.
 
 [LOGGING-BUCKET] destroy.sh must empty S3 logging bucket before stack deletion - CloudFormation cannot delete non-empty S3 buckets.
+
+## CloudFront Functions Runtime Compatibility
+
+[RUNTIME] CloudFront Functions runtime (cloudfront-js-2.0) has LIMITED ES6 support - avoid modern JavaScript syntax:
+- NO `export` keyword - use plain `async function handler(event)` without export
+- NO ES6 object shorthand - use `{ key: key, rest: rest }` instead of `{ key, rest }`
+- NO ES6 destructuring - use `var parsed = parsePath(uri); var key = parsed.key;` instead of `const { key, rest } = parsePath(uri)`
+- NO `const` or `let` - use `var` for all variable declarations
+- NO arrow functions in loops - use `function(item) { }` instead of `item => { }`
+- NO template literals - use string concatenation like `k + '=' + mv.value` instead of `${k}=${mv.value}`
+
+[KVS-REFERENCE] CloudFront Functions `cf.kvs()` requires KeyValueStore ID, NOT ARN - use `${RedirectKVS.Id}` in !Sub, not `${RedirectKVS.Arn}`.
+
+[AWS-CLI] AWS CLI minimum version 2.15.2+ required for `cloudfront-keyvaluestore` service commands - earlier versions (like 2.13.3) don't support KVS operations.
+
+## CI/CD and Automation
+
+[GITHUB-ACTIONS] `.github/workflows/populate-kvs.yml` automatically updates KVS when `data/redirects.json` is pushed to main branch.
+
+[SECRETS] GitHub Actions requires AWS credentials as repository secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) and KVS_ARN as a repository variable.
+
+[CONFIG] `config/deploy-params.local.sh` contains deployment parameters and is gitignored - never commit this file as it may contain ARNs and account IDs.

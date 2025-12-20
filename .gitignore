@@ -5,3 +5,6 @@
 .vscode/
 .idea/
 node_modules/
+
+# Local deployment configuration (contains secrets)
+config/*.local.sh
