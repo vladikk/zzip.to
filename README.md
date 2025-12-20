@@ -60,6 +60,25 @@ aws cloudformation validate-template \
 
 ### 2. Deploy the Stack
 
+#### Option A: Using Configuration File (Recommended)
+
+Create a local configuration file with your deployment parameters:
+
+```bash
+# Copy the template
+cp config/deploy-params.sh config/deploy-params.local.sh
+
+# Edit with your values
+vim config/deploy-params.local.sh
+
+# Deploy using config file
+./scripts/deploy.sh
+```
+
+The `deploy-params.local.sh` file is gitignored for security.
+
+#### Option B: Using Command-Line Arguments
+
 ```bash
 ./scripts/deploy.sh <environment> <stack-name> <certificate-arn> <hosted-zone-id> [domain-name]
 ```
@@ -78,6 +97,9 @@ aws cloudformation validate-template \
 - `certificate-arn`: ARN of ACM certificate (must be in us-east-1)
 - `hosted-zone-id`: Route 53 hosted zone ID
 - `domain-name`: Domain name (default: zzip.to)
+- `rate-limit-threshold`: Max requests per 5min per IP (default: 1000)
+
+**Note:** Command-line arguments override config file values.
 
 The deployment will:
 - Create CloudFormation stack in us-east-1
@@ -168,6 +190,41 @@ aws cloudformation validate-template \
 
 ### Update Redirect Mappings
 
+#### Option A: Using GitHub Actions (Recommended)
+
+The repository includes a GitHub Actions workflow that automatically updates the KeyValueStore when you commit changes to `data/redirects.json`.
+
+**Setup:**
+
+1. Go to your GitHub repository Settings → Secrets and variables → Actions
+
+2. Add the following **Secrets**:
+   - `AWS_ACCESS_KEY_ID`: Your AWS access key
+   - `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
+
+3. Add the following **Variables**:
+   - `KVS_ARN`: Your KeyValueStore ARN (from deployment outputs)
+
+**Usage:**
+
+Simply edit `data/redirects.json` and commit to the `main` branch:
+
+```bash
+# Edit redirects
+vim data/redirects.json
+
+# Commit and push
+git add data/redirects.json
+git commit -m "Update redirects"
+git push origin main
+```
+
+The workflow will automatically populate the KVS with your changes.
+
+You can also manually trigger the workflow from the Actions tab with a custom data file path.
+
+#### Option B: Manual Update via CLI
+
 ```bash
 # Add or update a single redirect
 aws cloudfront-keyvaluestore put-key \
@@ -178,6 +235,9 @@ aws cloudfront-keyvaluestore put-key \
     --kvs-arn "$KVS_ARN" \
     --query 'ETag' \
     --output text)"
+
+# Or bulk update from JSON file
+./scripts/populate-kvs.sh "$KVS_ARN" data/redirects.json
 ```
 
 ### Update Function Code

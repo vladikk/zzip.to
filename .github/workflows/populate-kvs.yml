@@ -1,0 +1,58 @@
+name: Populate CloudFront KeyValueStore
+
+# Triggers:
+# 1. Automatically on push to main when data/redirects.json changes
+# 2. Manually via workflow_dispatch with optional custom data file
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'data/redirects.json'
+  workflow_dispatch:
+    inputs:
+      data_file:
+        description: 'Path to redirects JSON file'
+        required: false
+        default: 'data/redirects.json'
+
+jobs:
+  populate-kvs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Validate redirects.json
+        run: |
+          DATA_FILE="${{ github.event.inputs.data_file || 'data/redirects.json' }}"
+          echo "Validating $DATA_FILE..."
+          jq empty "$DATA_FILE"
+          echo "✓ JSON is valid"
+
+      - name: Populate KeyValueStore
+        env:
+          KVS_ARN: ${{ vars.KVS_ARN }}
+        run: |
+          DATA_FILE="${{ github.event.inputs.data_file || 'data/redirects.json' }}"
+          echo "Populating KVS from $DATA_FILE..."
+          chmod +x scripts/populate-kvs.sh
+          ./scripts/populate-kvs.sh "$KVS_ARN" "$DATA_FILE"
+
+      - name: Summary
+        run: |
+          DATA_FILE="${{ github.event.inputs.data_file || 'data/redirects.json' }}"
+          REDIRECT_COUNT=$(jq '. | length' "$DATA_FILE")
+          echo "✓ Successfully populated $REDIRECT_COUNT redirects to KeyValueStore"
+          echo "✓ KVS ARN: ${{ vars.KVS_ARN }}"
