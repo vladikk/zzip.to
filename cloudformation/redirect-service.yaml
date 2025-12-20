@@ -1,0 +1,417 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "zzip.to URL redirect service using CloudFront, WAF, and KeyValueStore"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+      - Label:
+          default: "Domain Configuration"
+        Parameters:
+          - DomainName
+          - CertificateArn
+      - Label:
+          default: "Security Configuration"
+        Parameters:
+          - RateLimitPerIP
+    ParameterLabels:
+      Environment:
+        default: "Deployment Environment"
+      DomainName:
+        default: "Domain Name"
+      CertificateArn:
+        default: "SSL Certificate ARN"
+      RateLimitPerIP:
+        default: "Rate Limit per IP"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: "Environment name (dev, test, or prod)"
+
+  DomainName:
+    Type: String
+    Description: "Domain name for the CloudFront distribution (e.g., zzip.to)"
+    ConstraintDescription: "Must be a valid domain name"
+
+  CertificateArn:
+    Type: String
+    Description: "ARN of ACM certificate in us-east-1 for the domain"
+    AllowedPattern: ^arn:aws:acm:us-east-1:\d{12}:certificate/[a-f0-9-]+$
+    ConstraintDescription: "Must be a valid ACM certificate ARN in us-east-1"
+
+  RateLimitPerIP:
+    Type: Number
+    Default: 2000
+    MinValue: 100
+    MaxValue: 20000
+    Description: "Maximum requests per IP per 5 minutes"
+
+Resources:
+  RedirectKeyValueStore:
+    Type: AWS::CloudFront::KeyValueStore
+    DeletionPolicy: Retain
+    Properties:
+      Name: !Sub "${Environment}-${AWS::StackName}-redirect-kvs"
+      Comment: !Sub "KeyValueStore for ${Environment} environment redirect mappings"
+
+  RedirectFunction:
+    Type: AWS::CloudFront::Function
+    DependsOn: RedirectKeyValueStore
+    Properties:
+      Name: !Sub "${Environment}-${AWS::StackName}-redirect-fn"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: !Sub "Redirect function for ${Environment} environment"
+        Runtime: cloudfront-js-2.0
+        KeyValueStoreAssociations:
+          - KeyValueStoreARN: !GetAtt RedirectKeyValueStore.Arn
+      FunctionCode: |
+        function handler(event) {
+            // Extract the request URI
+            var uri = event.request.uri;
+
+            // ==================== VALIDATION RULES ====================
+
+            // 1. Check path length (max 256 characters)
+            if (uri.length > 256) {
+                return {
+                    statusCode: 404,
+                    statusDescription: "Not Found",
+                    headers: {
+                        "content-type": { value: "text/plain" }
+                    },
+                    body: "Not Found"
+                };
+            }
+
+            // 2. Check for invalid patterns
+            // Contains ".."
+            if (uri.indexOf("..") !== -1) {
+                return {
+                    statusCode: 404,
+                    statusDescription: "Not Found",
+                    headers: {
+                        "content-type": { value: "text/plain" }
+                    },
+                    body: "Not Found"
+                };
+            }
+
+            // Contains "//"
+            if (uri.indexOf("//") !== -1) {
+                return {
+                    statusCode: 404,
+                    statusDescription: "Not Found",
+                    headers: {
+                        "content-type": { value: "text/plain" }
+                    },
+                    body: "Not Found"
+                };
+            }
+
+            // Contains "%2F" or "%2f" (encoded forward slash, case-insensitive)
+            if (uri.indexOf("%2F") !== -1 || uri.indexOf("%2f") !== -1) {
+                return {
+                    statusCode: 404,
+                    statusDescription: "Not Found",
+                    headers: {
+                        "content-type": { value: "text/plain" }
+                    },
+                    body: "Not Found"
+                };
+            }
+
+            // 3. Check allowed characters: ONLY A-Z, a-z, 0-9, _, -, / allowed
+            var allowedCharsRegex = /^[A-Za-z0-9_\-\/]+$/;
+            if (!allowedCharsRegex.test(uri)) {
+                return {
+                    statusCode: 404,
+                    statusDescription: "Not Found",
+                    headers: {
+                        "content-type": { value: "text/plain" }
+                    },
+                    body: "Not Found"
+                };
+            }
+
+            // ==================== PATH PARSING ====================
+
+            // Remove leading "/" if present
+            var path = uri;
+            if (path.charAt(0) === "/") {
+                path = path.substring(1);
+            }
+
+            // Split by "/" to get segments
+            var segments = path.split("/");
+
+            // First segment = key
+            var key = segments[0];
+
+            // Remaining segments joined with "/" = rest
+            var rest = "";
+            if (segments.length > 1) {
+                rest = segments.slice(1).join("/");
+            }
+
+            // ==================== KVS LOOKUP ====================
+
+            // Lookup the key in KeyValueStore
+            var target = event.context.kvs.get(key);
+
+            // If key not found, return 404
+            if (target === null) {
+                return {
+                    statusCode: 404,
+                    statusDescription: "Not Found",
+                    headers: {
+                        "content-type": { value: "text/plain" }
+                    },
+                    body: "Not Found"
+                };
+            }
+
+            // ==================== BUILD REDIRECT URL ====================
+
+            var finalUrl;
+
+            // Check if target ends with "/*" (wildcard redirect)
+            if (target.length >= 2 && target.substring(target.length - 2) === "/*") {
+                // Wildcard redirect: remove "/*" and append "/" + rest
+                finalUrl = target.slice(0, -2) + "/" + rest;
+            } else {
+                // Exact redirect: don't allow extra path
+                if (rest !== "") {
+                    return {
+                        statusCode: 404,
+                        statusDescription: "Not Found",
+                        headers: {
+                            "content-type": { value: "text/plain" }
+                        },
+                        body: "Not Found"
+                    };
+                }
+                // Use target as-is
+                finalUrl = target;
+            }
+
+            // ==================== APPEND QUERY STRING ====================
+
+            var queryParams = event.request.querystring;
+            var queryString = "";
+            if (queryParams) {
+                var params = [];
+                for (var param in queryParams) {
+                    params.push(param + "=" + queryParams[param].value);
+                }
+                if (params.length > 0) {
+                    queryString = "?" + params.join("&");
+                }
+            }
+
+            // Append query string to final URL if present
+            if (queryString !== "") {
+                finalUrl = finalUrl + queryString;
+            }
+
+            // ==================== RETURN REDIRECT RESPONSE ====================
+
+            return {
+                statusCode: 301,
+                statusDescription: "Moved Permanently",
+                headers: {
+                    location: { value: finalUrl }
+                }
+            };
+        }
+
+  RedirectWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: CLOUDFRONT
+      Name: !Sub "${Environment}-${AWS::StackName}-waf"
+      Description: !Sub "WAF for ${Environment} environment redirect service"
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "${Environment}-${AWS::StackName}-waf-metrics"
+      Rules:
+        - Name: rate-limit-per-ip
+          Priority: 0
+          Statement:
+            RateBasedStatement:
+              Limit: !Ref RateLimitPerIP
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "${Environment}-rate-limit-rule"
+        - Name: aws-managed-core-rules
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "${Environment}-aws-core-rules"
+
+  RedirectDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - RedirectFunction
+      - RedirectWebACL
+      - LogsBucket
+    Properties:
+      DistributionConfig:
+        Comment: !Sub "Redirect distribution for ${Environment} environment"
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+        Aliases:
+          - !Ref DomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        Origins:
+          - Id: dummy-origin
+            DomainName: example.com
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: dummy-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt RedirectFunction.FunctionARN
+        WebACLId: !GetAtt RedirectWebACL.Arn
+        Logging:
+          Bucket: !Sub "${AWS::StackName}-logs.s3.amazonaws.com"
+          Prefix: !Sub "cloudfront/${Environment}/"
+          IncludeCookies: false
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-logs"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: delete-old-logs
+            Status: Enabled
+            ExpirationInDays: 90
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+
+  LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: LogsBucket
+    Properties:
+      Bucket: !Ref LogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudFrontLogs
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${LogsBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${RedirectDistribution}"
+
+Outputs:
+  KeyValueStoreId:
+    Description: "CloudFront KeyValueStore ID"
+    Value: !Ref RedirectKeyValueStore
+    Export:
+      Name: !Sub "${AWS::StackName}-KVSId"
+
+  KeyValueStoreArn:
+    Description: "CloudFront KeyValueStore ARN"
+    Value: !GetAtt RedirectKeyValueStore.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-KVSArn"
+
+  RedirectFunctionArn:
+    Description: "CloudFront Function ARN"
+    Value: !GetAtt RedirectFunction.FunctionARN
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionArn"
+
+  RedirectFunctionStage:
+    Description: "CloudFront Function Stage (DEVELOPMENT or LIVE)"
+    Value: !GetAtt RedirectFunction.Stage
+
+  WebACLId:
+    Description: "WAF WebACL ID"
+    Value: !GetAtt RedirectWebACL.Id
+    Export:
+      Name: !Sub "${AWS::StackName}-WebACLId"
+
+  WebACLArn:
+    Description: "WAF WebACL ARN"
+    Value: !GetAtt RedirectWebACL.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebACLArn"
+
+  DistributionId:
+    Description: "CloudFront Distribution ID"
+    Value: !Ref RedirectDistribution
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionId"
+
+  DistributionDomainName:
+    Description: "CloudFront Distribution domain name (e.g., d1234.cloudfront.net)"
+    Value: !GetAtt RedirectDistribution.DomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionDomain"
+
+  DistributionUrl:
+    Description: "Full CloudFront Distribution URL"
+    Value: !Sub "https://${RedirectDistribution.DomainName}"
+
+  LogsBucketName:
+    Description: "S3 bucket name for CloudFront access logs"
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-LogsBucket"
