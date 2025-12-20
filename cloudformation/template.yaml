@@ -1,0 +1,344 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for zzip.to redirect service with WAF protection'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - prod
+      - test
+      - dev
+    Description: Environment type for resource naming and configuration
+
+  DomainName:
+    Type: String
+    Default: zzip.to
+    Description: Domain name for the service
+
+  RateLimitThreshold:
+    Type: Number
+    Default: 1000
+    Description: Maximum number of requests per 5-minute window per IP address
+
+  CertificateArn:
+    Type: String
+    Description: ARN of ACM certificate for the domain (must be in us-east-1)
+
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID for the domain
+
+Resources:
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "${Environment}-${AWS::StackName}-webacl"
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: !Sub "${Environment}-${AWS::StackName}-common-rules"
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "${Environment}-${AWS::StackName}-common-rules"
+        - Name: !Sub "${Environment}-${AWS::StackName}-rate-limit"
+          Priority: 2
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: !Ref RateLimitThreshold
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub "${Environment}-${AWS::StackName}-rate-limit"
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "${Environment}-${AWS::StackName}-webacl"
+
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Environment}-${AWS::StackName}-cf-logs-${AWS::AccountId}"
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireLogs
+            Status: Enabled
+            ExpirationInDays: 90
+
+  RedirectKVS:
+    Type: AWS::CloudFront::KeyValueStore
+    Properties:
+      Name: !Sub "${Environment}-${AWS::StackName}-redirects"
+      Comment: "Stores redirect mappings for zzip.to service"
+
+  RedirectFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub "${Environment}-${AWS::StackName}-redirect"
+      AutoPublish: true
+      FunctionConfig:
+        Comment: "Redirect handler for zzip.to"
+        Runtime: cloudfront-js-2.0
+        KeyValueStoreAssociations:
+          - KeyValueStoreARN: !GetAtt RedirectKVS.Arn
+      FunctionCode: !Sub |
+        import cf from 'cloudfront';
+
+        var kvsId = '${RedirectKVS.Id}';
+        var kvsHandle = cf.kvs(kvsId);
+
+        function validatePath(path) {
+          if (path.length > 256) {
+            return false;
+          }
+          if (path.includes('..')) {
+            return false;
+          }
+          if (path.includes('//')) {
+            return false;
+          }
+          if (path.includes('%2F') || path.includes('%2f')) {
+            return false;
+          }
+          var allowedPattern = /^[A-Za-z0-9_\-\/]+$/;
+          if (!allowedPattern.test(path)) {
+            return false;
+          }
+          return true;
+        }
+
+        function parsePath(uri) {
+          var path = uri.startsWith('/') ? uri.slice(1) : uri;
+          if (path === '') {
+            return { key: null, rest: null };
+          }
+          var segments = path.split('/');
+          var key = segments[0];
+          var rest = segments.length > 1 ? segments.slice(1).join('/') : null;
+          return { key: key, rest: rest };
+        }
+
+        function buildQueryString(querystring) {
+          if (!querystring || Object.keys(querystring).length === 0) {
+            return '';
+          }
+          var params = [];
+          for (var k in querystring) {
+            var param = querystring[k];
+            if (param.multiValue) {
+              param.multiValue.forEach(function(mv) {
+                params.push(mv.value ? k + '=' + mv.value : k);
+              });
+            } else {
+              params.push(param.value ? k + '=' + param.value : k);
+            }
+          }
+          return params.length > 0 ? '?' + params.join('&') : '';
+        }
+
+        function buildRedirectUrl(target, rest, querystring) {
+          var url = target;
+          var isWildcard = target.endsWith('/*');
+          if (isWildcard) {
+            url = target.slice(0, -2);
+            if (rest) {
+              url = url.endsWith('/') ? url + rest : url + '/' + rest;
+            } else {
+              if (!url.endsWith('/')) {
+                url = url + '/';
+              }
+            }
+          }
+          url += buildQueryString(querystring);
+          return url;
+        }
+
+        function redirect301(location) {
+          return {
+            statusCode: 301,
+            statusDescription: 'Moved Permanently',
+            headers: {
+              'location': { value: location },
+              'cache-control': { value: 'public, max-age=86400' }
+            }
+          };
+        }
+
+        function notFound() {
+          return {
+            statusCode: 404,
+            statusDescription: 'Not Found',
+            headers: {
+              'content-type': { value: 'text/plain' }
+            },
+            body: 'Not Found'
+          };
+        }
+
+        async function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          var querystring = request.querystring;
+          if (uri === '/' || uri === '') {
+            return notFound();
+          }
+          if (!validatePath(uri)) {
+            return notFound();
+          }
+          var parsed = parsePath(uri);
+          var key = parsed.key;
+          var rest = parsed.rest;
+          if (!key) {
+            return notFound();
+          }
+          var target;
+          try {
+            target = await kvsHandle.get(key);
+          } catch (err) {
+            return notFound();
+          }
+          if (!target) {
+            return notFound();
+          }
+          var isWildcard = target.endsWith('/*');
+          if (!isWildcard && rest) {
+            return notFound();
+          }
+          var redirectUrl = buildRedirectUrl(target, rest, querystring);
+          return redirect301(redirectUrl);
+        }
+
+  DummyOriginBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Environment}-${AWS::StackName}-origin-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${Environment}-${AWS::StackName}-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "${Environment} zzip.to redirect service"
+        Aliases:
+          - !Ref DomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        WebACLId: !GetAtt WebACL.Arn
+        DefaultCacheBehavior:
+          TargetOriginId: dummy-origin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt RedirectFunction.FunctionARN
+        Origins:
+          - Id: dummy-origin
+            DomainName: !GetAtt DummyOriginBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+        Logging:
+          Bucket: !GetAtt LoggingBucket.RegionalDomainName
+          Prefix: !Sub "${Environment}/"
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+
+  DNSRecordA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  DNSRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+Outputs:
+  WebACLArn:
+    Description: ARN of the WAF WebACL
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub "${Environment}-${AWS::StackName}-webacl-arn"
+
+  WebACLId:
+    Description: ID of the WAF WebACL
+    Value: !GetAtt WebACL.Id
+    Export:
+      Name: !Sub "${Environment}-${AWS::StackName}-webacl-id"
+
+  DistributionId:
+    Description: ID of the CloudFront Distribution
+    Value: !Ref Distribution
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionId"
+
+  DistributionDomainName:
+    Description: Domain name of the CloudFront Distribution
+    Value: !GetAtt Distribution.DomainName
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionDomain"
+
+  KeyValueStoreArn:
+    Description: ARN of the CloudFront KeyValueStore
+    Value: !GetAtt RedirectKVS.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-KVSArn"
+
+  KeyValueStoreId:
+    Description: ID of the CloudFront KeyValueStore
+    Value: !GetAtt RedirectKVS.Id
+    Export:
+      Name: !Sub "${AWS::StackName}-KVSId"
+
+  RedirectFunctionArn:
+    Description: ARN of the CloudFront Function
+    Value: !GetAtt RedirectFunction.FunctionARN
+    Export:
+      Name: !Sub "${AWS::StackName}-FunctionArn"
