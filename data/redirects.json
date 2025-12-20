@@ -1,5 +1,6 @@
 [
   { "key": "gh", "value": "https://github.com/*" },
   { "key": "aws", "value": "https://console.aws.amazon.com" },
-  { "key": "bank", "value": "https://discountbank.co.il" }
+  { "key": "bank", "value": "https://discountbank.co.il" },
+  { "key": "fb", "value": "https://facebook.com" }
 ]
