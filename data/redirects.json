@@ -8,5 +8,6 @@
   { "key": "royal-p", "value": "https://isu.bizsys.pearson.com/OA_HTML/AppsLocalLogin.jsp?requestUrl=https%3A%2F%2Fisu.bizsys.pearson.com%3A443%2FOA_HTML%2FOA.jsp%3Fpage%3D%2Foracle%2Fapps%2Ffnd%2Fframework%2Fnavigate%2Fwebui%2FHomePG%26homePage%3DY%26OAPB%3DFWK_HOMEPAGE_BRAND%26transactionid%3D779511931%26oapc%3D4%26oas%3DxdPcuj3GNS9Ey6416vG_Ow..&cancelUrl=https%3A%2F%2Fisu.bizsys.pearson.com%3A443%2FOA_HTML%2FAppsLogin&langCode=US" },
   { "key": "royal-o", "value": "https://app.oreilly.com/authors/portal.csp" },
   { "key": "stocks", "value": "https://meitav.viewtrade.com" },
-  { "key": "chess", "value": "https://www.youtube.com/playlist?list=PLp7SLTJhX1u6zKT5IfRVmcVs1U1C3eHb5" }
+  { "key": "chess", "value": "https://www.youtube.com/playlist?list=PLp7SLTJhX1u6zKT5IfRVmcVs1U1C3eHb5" },
+  { "key": "import", "value": "https://courses.kormoranil.com" }
 ]
