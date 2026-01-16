@@ -9,5 +9,6 @@
   { "key": "royal-o", "value": "https://app.oreilly.com/authors/portal.csp" },
   { "key": "stocks", "value": "https://meitav.viewtrade.com" },
   { "key": "chess", "value": "https://www.youtube.com/playlist?list=PLp7SLTJhX1u6zKT5IfRVmcVs1U1C3eHb5" },
-  { "key": "import", "value": "https://courses.kormoranil.com" }
+  { "key": "import", "value": "https://courses.kormoranil.com" },
+  { "key": "nas", "value": "https://quickconnect.to/vladikk" }
 ]
