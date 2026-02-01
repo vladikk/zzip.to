@@ -86,19 +86,19 @@
 - [x] Run all tests — must pass before next task
 
 ### Task 5: Scaffold React UI project
-- [ ] Clean out existing `ui/` directory (remove stale dist/, node_modules/, keep nothing)
-- [ ] Initialize new Vite + React + TypeScript project in `ui/`
-- [ ] Install dependencies: `react`, `react-dom`, `react-router-dom`, `aws-amplify`, `@radix-ui/themes`, `zod`
-- [ ] Install dev dependencies: `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `typescript`, `@types/react`, `@types/react-dom`
-- [ ] Configure `vite.config.ts` with React plugin
-- [ ] Configure `tsconfig.json`
-- [ ] Configure `vitest` in vite config (jsdom environment)
-- [ ] Create `src/main.tsx` entry point, `src/App.tsx` shell with React Router
-- [ ] Add `.env.example` with required vars: `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`, `VITE_COGNITO_REGION`, `VITE_API_ENDPOINT`
-- [ ] Add `ui/` to project `.gitignore` node_modules, update as needed
-- [ ] Verify `npm run dev` starts and `npm run build` succeeds
-- [ ] Write a smoke test (App renders without crashing)
-- [ ] Run tests — must pass before next task
+- [x] Clean out existing `ui/` directory (remove stale dist/, node_modules/, keep nothing)
+- [x] Initialize new Vite + React + TypeScript project in `ui/`
+- [x] Install dependencies: `react`, `react-dom`, `react-router-dom`, `aws-amplify`, `@radix-ui/themes`, `zod`
+- [x] Install dev dependencies: `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`, `typescript`, `@types/react`, `@types/react-dom`
+- [x] Configure `vite.config.ts` with React plugin
+- [x] Configure `tsconfig.json`
+- [x] Configure `vitest` in vite config (jsdom environment)
+- [x] Create `src/main.tsx` entry point, `src/App.tsx` shell with React Router
+- [x] Add `.env.example` with required vars: `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`, `VITE_COGNITO_REGION`, `VITE_API_ENDPOINT`
+- [x] Add `ui/` to project `.gitignore` node_modules, update as needed
+- [x] Verify `npm run dev` starts and `npm run build` succeeds
+- [x] Write a smoke test (App renders without crashing)
+- [x] Run tests — must pass before next task
 
 ### Task 6: Implement authentication flow
 - [ ] Create `src/lib/amplify.ts` — configure Amplify with env vars (User Pool only, no Identity Pool)
