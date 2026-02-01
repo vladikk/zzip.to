@@ -65,16 +65,16 @@
 - [x] Run existing tests — must pass before next task
 
 ### Task 3: Add Lambda CRUD handlers to CloudFormation
-- [ ] Add `ListLinksFunction` Lambda (GET /links) — scans DynamoDB, returns sorted JSON array
-- [ ] Add `CreateLinkFunction` Lambda (PUT /links/{key}) — validates input, puts item in DynamoDB
-- [ ] Add `DeleteLinkFunction` Lambda (DELETE /links/{key}) — deletes item from DynamoDB
-- [ ] Wire each Lambda to its API Gateway method with Cognito authorizer and proxy integration
-- [ ] Add Lambda permissions for API Gateway invocation
-- [ ] Add CORS headers (`Access-Control-Allow-Origin`, `Access-Control-Allow-Headers`, `Access-Control-Allow-Methods`) in all Lambda responses
-- [ ] Add `ApiDeployment` and `ApiStage` resources
-- [ ] Validate template
-- [ ] Write tests for each Lambda handler (success cases, error cases, input validation)
-- [ ] Run all tests — must pass before next task
+- [x] Add `ListLinksFunction` Lambda (GET /links) — scans DynamoDB, returns sorted JSON array
+- [x] Add `CreateLinkFunction` Lambda (PUT /links/{key}) — validates input, puts item in DynamoDB
+- [x] Add `DeleteLinkFunction` Lambda (DELETE /links/{key}) — deletes item from DynamoDB
+- [x] Wire each Lambda to its API Gateway method with Cognito authorizer and proxy integration
+- [x] Add Lambda permissions for API Gateway invocation
+- [x] Add CORS headers (`Access-Control-Allow-Origin`, `Access-Control-Allow-Headers`, `Access-Control-Allow-Methods`) in all Lambda responses
+- [x] Add `ApiDeployment` and `ApiStage` resources
+- [x] Validate template
+- [x] Write tests for each Lambda handler (success cases, error cases, input validation)
+- [x] Run all tests — must pass before next task
 
 ### Task 4: Add KVS sync Lambda
 - [ ] Enable DynamoDB Streams on `LinksTable` (NEW_AND_OLD_IMAGES)
