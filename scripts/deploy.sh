@@ -49,6 +49,24 @@ aws cloudformation deploy \
   --no-fail-on-empty-changeset
 
 echo "Deployment complete!"
+
+echo "Creating new API Gateway deployment to ensure latest configuration is active..."
+API_ID=$(aws cloudformation describe-stacks \
+  --stack-name "$STACK_NAME-$ENVIRONMENT" \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text | sed 's|https://||' | cut -d. -f1)
+
+if [ -n "$API_ID" ]; then
+  aws apigateway create-deployment \
+    --rest-api-id "$API_ID" \
+    --stage-name "$ENVIRONMENT" \
+    --region us-east-1 > /dev/null
+  echo "API Gateway deployment updated."
+else
+  echo "Warning: Could not determine API Gateway ID. API deployment may need manual update."
+fi
+
 echo "Fetching outputs..."
 aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
