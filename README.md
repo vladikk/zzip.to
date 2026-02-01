@@ -10,6 +10,8 @@ A serverless URL redirect service built on AWS CloudFront Functions with KeyValu
 - **Path Validation**: Strict path validation to prevent traversal attacks
 - **Observability**: CloudFront access logs, WAF logs, and CloudWatch metrics
 - **Scalable**: KeyValueStore for dynamic redirect mappings without redeployment
+- **Admin UI**: Web-based management interface for creating, viewing, and deleting redirects
+- **Authenticated**: Cognito-based auth with email whitelist for admin access
 
 ## Architecture
 
@@ -19,6 +21,30 @@ A serverless URL redirect service built on AWS CloudFront Functions with KeyValu
 - **WAF**: Web Application Firewall with managed rule sets and rate limiting
 - **Route 53**: DNS alias records for domain routing
 - **S3**: Logging bucket for access logs
+- **Admin UI**: React SPA hosted on CloudFront (`admin.zzip.to`) for managing redirects
+- **API Gateway**: REST API with Cognito authorization for CRUD operations
+- **Cognito User Pool**: Authentication with email whitelist enforcement
+- **DynamoDB**: Persistent storage for redirect mappings with stream-based KVS sync
+- **DynamoDB Streams + Lambda**: Automatic sync from DynamoDB to CloudFront KVS on every change
+
+### DynamoDB to KVS Sync Architecture
+
+When redirects are managed through the admin UI, changes flow through the system as follows:
+
+```
+Admin UI -> API Gateway (Cognito auth) -> Lambda -> DynamoDB (write)
+                                                       |
+                                                  DynamoDB Stream
+                                                       |
+                                                  KVS Sync Lambda -> CloudFront KVS (update)
+                                                       |
+                                              Edge redirect function reads from KVS
+```
+
+- INSERT/MODIFY events in DynamoDB trigger a `PutKey` call to CloudFront KVS
+- REMOVE events trigger a `DeleteKey` call to CloudFront KVS
+- The sync is near-real-time (typically under a few seconds)
+- This replaces the manual `populate-kvs.sh` script and GitHub Actions workflow for redirect updates
 
 ## Prerequisites
 
@@ -104,8 +130,10 @@ The `deploy-params.local.sh` file is gitignored for security.
 The deployment will:
 - Create CloudFormation stack in us-east-1
 - Deploy WAF, CloudFront, KVS, and all resources
-- Configure Route 53 DNS records
-- Output stack details including KVS ARN
+- Deploy Cognito User Pool, API Gateway, DynamoDB, and Lambda handlers
+- Deploy admin UI CloudFront distribution and S3 bucket
+- Configure Route 53 DNS records for both `zzip.to` and `admin.zzip.to`
+- Output stack details including KVS ARN, API endpoint, and Cognito IDs
 
 **Note:** Initial CloudFront deployment takes 5-10 minutes to propagate globally.
 
@@ -158,19 +186,30 @@ curl -I https://zzip.to/unknown
 
 ## Testing
 
-### Run Unit Tests
+### Run Backend Tests
 
 ```bash
 ./scripts/test.sh
 ```
 
-This runs all test cases covering:
-- Root path handling
-- Exact and wildcard redirects
-- Query string preservation
-- Path validation (traversal, length, characters)
-- Unknown key handling
-- All helper functions
+This runs all backend test cases covering:
+- CloudFront redirect function (exact/wildcard redirects, path validation, query strings)
+- Lambda CRUD handlers (list, create, delete links)
+- KVS sync Lambda (insert, modify, remove events)
+- Pre-auth Lambda (email whitelist enforcement)
+- Seed script logic
+
+### Run Frontend Tests
+
+```bash
+cd ui && npm test
+```
+
+This runs React component and integration tests covering:
+- Authentication flow (sign-in, sign-out, protected routes)
+- Links management (list, add, delete)
+- API client (auth token injection, error handling)
+- Form validation (key format, URL validation)
 
 ### Validate Scripts
 
@@ -314,6 +353,88 @@ aws s3 cp s3://dev-zzip-to-cf-logs-123456789012/dev/ . --recursive
      --parameter-overrides RateLimitThreshold=2000 \
      --region us-east-1
    ```
+
+## Admin UI
+
+The admin UI is a React SPA for managing redirect links through a web interface at `admin.zzip.to`.
+
+### Prerequisites
+
+- Node.js 18+ for building the UI
+- A deployed CloudFormation stack (includes Cognito, API Gateway, DynamoDB, and admin CloudFront distribution)
+
+### Setting Up the Admin UI
+
+1. **Get stack outputs** after deploying the CloudFormation stack:
+
+   ```bash
+   aws cloudformation describe-stacks \
+     --stack-name zzip-to-dev \
+     --region us-east-1 \
+     --query 'Stacks[0].Outputs'
+   ```
+
+   Note the values for `UserPoolId`, `UserPoolClientId`, and `ApiEndpoint`.
+
+2. **Configure environment variables**:
+
+   ```bash
+   cp ui/.env.example ui/.env
+   ```
+
+   Edit `ui/.env` with your values:
+   ```
+   VITE_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
+   VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+   VITE_COGNITO_REGION=us-east-1
+   VITE_API_ENDPOINT=https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/prod
+   ```
+
+3. **Create an admin user** in Cognito:
+
+   ```bash
+   aws cognito-idp admin-create-user \
+     --user-pool-id us-east-1_XXXXXXXXX \
+     --username admin@example.com \
+     --user-attributes Name=email,Value=admin@example.com Name=email_verified,Value=true \
+     --temporary-password 'TempPass123!' \
+     --region us-east-1
+   ```
+
+   The email must be in the `AllowedEmails` parameter passed during stack deployment. Non-whitelisted emails are rejected by the pre-authentication Lambda trigger.
+
+4. **Seed existing redirects** (one-time migration from `data/redirects.json` to DynamoDB):
+
+   ```bash
+   ./scripts/seed-dynamodb.sh
+   ```
+
+5. **Build and deploy the UI**:
+
+   ```bash
+   ./scripts/deploy-ui.sh
+   ```
+
+   This builds the React app, syncs files to S3, and invalidates the CloudFront cache.
+
+6. **Access the admin UI** at `https://admin.zzip.to` and sign in with the admin user created above. On first login, you'll be prompted to change the temporary password.
+
+### Local Development
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+The dev server runs at `http://localhost:5173`. Ensure the `.env` file is configured with valid stack outputs.
+
+### Running UI Tests
+
+```bash
+cd ui
+npm test
+```
 
 ## Stack Deletion
 
