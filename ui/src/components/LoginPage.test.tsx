@@ -5,29 +5,25 @@ import { MemoryRouter } from 'react-router-dom';
 import LoginPage from './LoginPage';
 
 const mockSignIn = vi.fn();
-const mockNavigate = vi.fn();
+const mockConfirmNewPassword = vi.fn();
+let mockNeedsNewPassword = false;
 
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     signIn: mockSignIn,
+    confirmNewPassword: mockConfirmNewPassword,
     isAuthenticated: false,
     isLoading: false,
+    needsNewPassword: mockNeedsNewPassword,
     user: null,
     signOut: vi.fn(),
   }),
 }));
 
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
-});
-
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNeedsNewPassword = false;
   });
 
   it('renders login form with email and password fields', () => {
@@ -60,7 +56,6 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(mockSignIn).toHaveBeenCalledWith('admin@example.com', 'secret123');
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
   });
 
   it('displays error message on sign-in failure', async () => {
@@ -101,7 +96,7 @@ describe('LoginPage', () => {
 
     resolveSignIn!();
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Sign In' })).not.toBeDisabled();
     });
   });
 
@@ -125,7 +120,40 @@ describe('LoginPage', () => {
 
     resolveSignIn!();
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalled();
+      expect(screen.getByLabelText('Email')).not.toBeDisabled();
+    });
+  });
+
+  it('shows new password form when needsNewPassword is true', () => {
+    mockNeedsNewPassword = true;
+
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Set New Password')).toBeInTheDocument();
+    expect(screen.getByLabelText('New Password')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set Password' })).toBeInTheDocument();
+  });
+
+  it('calls confirmNewPassword on new password form submission', async () => {
+    mockNeedsNewPassword = true;
+    mockConfirmNewPassword.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText('New Password'), 'myNewPassword123');
+    await user.click(screen.getByRole('button', { name: 'Set Password' }));
+
+    await waitFor(() => {
+      expect(mockConfirmNewPassword).toHaveBeenCalledWith('myNewPassword123');
     });
   });
 });
