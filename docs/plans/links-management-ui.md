@@ -153,9 +153,9 @@
 - [x] Verify all wildcard redirect patterns still work after migration
 
 ### Task 11: [Final] Update documentation
-- [ ] Update README.md with admin UI setup instructions (Cognito user creation, env vars, deployment)
-- [ ] Update IMPORTANT.md with new constraints discovered during implementation
-- [ ] Document the DynamoDB → KVS sync architecture
+- [x] Update README.md with admin UI setup instructions (Cognito user creation, env vars, deployment)
+- [x] Update IMPORTANT.md with new constraints discovered during implementation
+- [x] Document the DynamoDB → KVS sync architecture
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
 
