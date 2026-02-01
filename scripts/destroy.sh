@@ -3,14 +3,15 @@ set -euo pipefail
 
 ENVIRONMENT=${1:-dev}
 STACK_NAME=${2:-zzip-to}
+REGION=${REGION:-us-east-1}
 
-echo "Deleting stack $STACK_NAME-$ENVIRONMENT..."
+echo "Deleting stack $STACK_NAME-$ENVIRONMENT in $REGION..."
 
 # Empty logging bucket first (required for deletion)
 BUCKET=$(aws cloudformation describe-stack-resource \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
   --logical-resource-id LoggingBucket \
-  --region us-east-1 \
+  --region "$REGION" \
   --query 'StackResourceDetail.PhysicalResourceId' \
   --output text 2>/dev/null || echo "")
 
@@ -23,7 +24,7 @@ fi
 ADMIN_BUCKET=$(aws cloudformation describe-stack-resource \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
   --logical-resource-id AdminBucket \
-  --region us-east-1 \
+  --region "$REGION" \
   --query 'StackResourceDetail.PhysicalResourceId' \
   --output text 2>/dev/null || echo "")
 
@@ -34,11 +35,11 @@ fi
 
 aws cloudformation delete-stack \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
-  --region us-east-1
+  --region "$REGION"
 
 echo "Waiting for deletion..."
 aws cloudformation wait stack-delete-complete \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
-  --region us-east-1
+  --region "$REGION"
 
 echo "Stack deleted!"

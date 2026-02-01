@@ -781,6 +781,14 @@ Resources:
                   - cloudfront-keyvaluestore:PutKey
                   - cloudfront-keyvaluestore:DeleteKey
                 Resource: !GetAtt RedirectKVS.Arn
+        - PolicyName: SQSDLQAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt KvsSyncDLQ.Arn
 
   KvsSyncFunction:
     Type: AWS::Lambda::Function
@@ -882,6 +890,12 @@ Resources:
             }
           };
 
+  KvsSyncDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-${AWS::StackName}-kvs-sync-dlq"
+      MessageRetentionPeriod: 1209600
+
   KvsSyncEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -891,6 +905,9 @@ Resources:
       BatchSize: 10
       MaximumRetryAttempts: 3
       BisectBatchOnFunctionError: true
+      DestinationConfig:
+        OnFailure:
+          Destination: !GetAtt KvsSyncDLQ.Arn
 
   AdminBucket:
     Type: AWS::S3::Bucket
