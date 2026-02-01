@@ -137,10 +137,10 @@
 - [x] Run all tests — must pass before next task
 
 ### Task 9: Seed DynamoDB from existing redirects.json
-- [ ] Create `scripts/seed-dynamodb.sh` — reads `data/redirects.json` and batch-writes items to DynamoDB LinksTable
-- [ ] Document in script that this is a one-time migration from file-based to DB-based management
-- [ ] Write test for seed script logic (parse JSON, generate correct DynamoDB items)
-- [ ] Run all tests — must pass before next task
+- [x] Create `scripts/seed-dynamodb.sh` — reads `data/redirects.json` and batch-writes items to DynamoDB LinksTable
+- [x] Document in script that this is a one-time migration from file-based to DB-based management
+- [x] Write test for seed script logic (parse JSON, generate correct DynamoDB items)
+- [x] Run all tests — must pass before next task
 
 ### Task 10: Verify acceptance criteria
 - [ ] Verify all CloudFormation resources are correctly defined and template validates
