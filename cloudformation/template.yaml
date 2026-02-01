@@ -855,13 +855,21 @@ Resources:
                     } else if (deleteErr.name === 'ConflictException') {
                       console.log(`ETag conflict for delete ${key}, retrying with fresh ETag`);
                       currentEtag = await getETag(kvsArn);
-                      const result = await client.send(new DeleteKeyCommand({
-                        KvsARN: kvsArn,
-                        Key: key,
-                        IfMatch: currentEtag
-                      }));
-                      currentEtag = result.ETag;
-                      console.log(`KVS delete (retry): ${key}`);
+                      try {
+                        const result = await client.send(new DeleteKeyCommand({
+                          KvsARN: kvsArn,
+                          Key: key,
+                          IfMatch: currentEtag
+                        }));
+                        currentEtag = result.ETag;
+                        console.log(`KVS delete (retry): ${key}`);
+                      } catch (retryErr) {
+                        if (retryErr.name === 'ResourceNotFoundException') {
+                          console.log(`KVS key already deleted on retry: ${key}`);
+                        } else {
+                          throw retryErr;
+                        }
+                      }
                     } else {
                       throw deleteErr;
                     }
