@@ -33,6 +33,19 @@ if [[ -n "$ADMIN_BUCKET" ]]; then
   aws s3 rm "s3://$ADMIN_BUCKET" --recursive || true
 fi
 
+# Empty dummy origin bucket (required for deletion)
+DUMMY_BUCKET=$(aws cloudformation describe-stack-resource \
+  --stack-name "$STACK_NAME-$ENVIRONMENT" \
+  --logical-resource-id DummyOriginBucket \
+  --region "$REGION" \
+  --query 'StackResourceDetail.PhysicalResourceId' \
+  --output text 2>/dev/null || echo "")
+
+if [[ -n "$DUMMY_BUCKET" ]]; then
+  echo "Emptying dummy origin bucket $DUMMY_BUCKET..."
+  aws s3 rm "s3://$DUMMY_BUCKET" --recursive || true
+fi
+
 aws cloudformation delete-stack \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
   --region "$REGION"
