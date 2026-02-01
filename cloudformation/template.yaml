@@ -852,6 +852,16 @@ Resources:
                     if (deleteErr.name === 'ResourceNotFoundException') {
                       console.log(`KVS key already deleted: ${key}`);
                       currentEtag = await getETag(kvsArn);
+                    } else if (deleteErr.name === 'ConflictException') {
+                      console.log(`ETag conflict for delete ${key}, retrying with fresh ETag`);
+                      currentEtag = await getETag(kvsArn);
+                      const result = await client.send(new DeleteKeyCommand({
+                        KvsARN: kvsArn,
+                        Key: key,
+                        IfMatch: currentEtag
+                      }));
+                      currentEtag = result.ETag;
+                      console.log(`KVS delete (retry): ${key}`);
                     } else {
                       throw deleteErr;
                     }

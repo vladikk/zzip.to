@@ -16,6 +16,7 @@ DOMAIN_NAME=${5:-${DOMAIN_NAME:-zzip.to}}
 RATE_LIMIT_THRESHOLD=${RATE_LIMIT_THRESHOLD:-1000}
 ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
 ADMIN_DOMAIN_NAME=${ADMIN_DOMAIN_NAME:-admin.zzip.to}
+REGION=${REGION:-us-east-1}
 
 if [[ -z "$CERTIFICATE_ARN" || -z "$HOSTED_ZONE_ID" || -z "$ALLOWED_EMAILS" ]]; then
   echo "Usage: ./scripts/deploy.sh [environment] [stack-name] [certificate-arn] [hosted-zone-id] [domain-name]"
@@ -31,12 +32,12 @@ if [[ -z "$CERTIFICATE_ARN" || -z "$HOSTED_ZONE_ID" || -z "$ALLOWED_EMAILS" ]]; 
   exit 1
 fi
 
-echo "Deploying $STACK_NAME ($ENVIRONMENT) to us-east-1..."
+echo "Deploying $STACK_NAME ($ENVIRONMENT) to $REGION..."
 
 aws cloudformation deploy \
   --template-file cloudformation/template.yaml \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
-  --region us-east-1 \
+  --region "$REGION" \
   --parameter-overrides \
     Environment="$ENVIRONMENT" \
     CertificateArn="$CERTIFICATE_ARN" \
@@ -53,7 +54,7 @@ echo "Deployment complete!"
 echo "Creating new API Gateway deployment to ensure latest configuration is active..."
 API_ID=$(aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
-  --region us-east-1 \
+  --region "$REGION" \
   --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
   --output text | sed 's|https://||' | cut -d. -f1)
 
@@ -61,7 +62,7 @@ if [ -n "$API_ID" ]; then
   aws apigateway create-deployment \
     --rest-api-id "$API_ID" \
     --stage-name "$ENVIRONMENT" \
-    --region us-east-1 > /dev/null
+    --region "$REGION" > /dev/null
   echo "API Gateway deployment updated."
 else
   echo "Warning: Could not determine API Gateway ID. API deployment may need manual update."
@@ -70,6 +71,6 @@ fi
 echo "Fetching outputs..."
 aws cloudformation describe-stacks \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
-  --region us-east-1 \
+  --region "$REGION" \
   --query 'Stacks[0].Outputs' \
   --output table

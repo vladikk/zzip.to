@@ -101,3 +101,7 @@ This file contains critical constraints and non-obvious information discovered d
 [DEPLOY] `scripts/deploy-ui.sh` builds the UI, syncs to S3, and creates a CloudFront invalidation for `/*`. It reads the S3 bucket name and distribution ID from CloudFormation stack outputs.
 
 [SEED] `scripts/seed-dynamodb.sh` is a one-time migration script that reads `data/redirects.json` and batch-writes items to DynamoDB. After migration, redirects are managed exclusively through the admin UI.
+
+[DYNAMO] `LinksTable` has `DeletionPolicy: Retain` and `UpdateReplacePolicy: Retain` - the table survives stack deletion and must be manually deleted if cleanup is desired.
+
+[DEPLOY] CloudFormation deployment requires `CAPABILITY_NAMED_IAM` (not just `CAPABILITY_IAM`) because IAM roles use explicit `RoleName` properties with `!Sub` expressions.

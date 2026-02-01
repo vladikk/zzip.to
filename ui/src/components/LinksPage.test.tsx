@@ -99,7 +99,7 @@ describe('LinksPage', () => {
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveTextContent(/gh/);
 
-    const confirmButton = dialog.querySelectorAll('button')[1];
+    const confirmButton = Array.from(dialog.querySelectorAll('button')).find(b => b.textContent === 'Delete')!;
     await user.click(confirmButton);
 
     await waitFor(() => {
