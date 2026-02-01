@@ -1,7 +1,11 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
 
 function getApiEndpoint(): string {
-  return import.meta.env.VITE_API_ENDPOINT;
+  const endpoint = import.meta.env.VITE_API_ENDPOINT;
+  if (!endpoint) {
+    throw new Error('VITE_API_ENDPOINT environment variable is not configured. See .env.example for required variables.');
+  }
+  return endpoint;
 }
 
 export interface Link {
