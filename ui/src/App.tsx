@@ -1,4 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import LoginPage from './components/LoginPage';
 
 function Placeholder() {
   return <div>zzip.to Admin</div>;
@@ -7,9 +10,19 @@ function Placeholder() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="*" element={<Placeholder />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute>
+                <Placeholder />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

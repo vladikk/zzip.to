@@ -101,15 +101,15 @@
 - [x] Run tests — must pass before next task
 
 ### Task 6: Implement authentication flow
-- [ ] Create `src/lib/amplify.ts` — configure Amplify with env vars (User Pool only, no Identity Pool)
-- [ ] Create `src/contexts/AuthContext.tsx` — React context providing `user`, `isAuthenticated`, `isLoading`, `signIn()`, `signOut()`
-- [ ] Create `src/components/LoginPage.tsx` — email/password form using Radix UI components (Dialog, TextField, Button)
-- [ ] Create `src/components/LoginPage.module.css` — styles for login page
-- [ ] Create `src/components/ProtectedRoute.tsx` — redirects to login if not authenticated
-- [ ] Wire auth context in `App.tsx`, protect main routes
-- [ ] Write tests for AuthContext (mock Amplify calls, test sign-in/sign-out state transitions)
-- [ ] Write tests for LoginPage (renders form, handles submission, shows errors)
-- [ ] Run tests — must pass before next task
+- [x] Create `src/lib/amplify.ts` — configure Amplify with env vars (User Pool only, no Identity Pool)
+- [x] Create `src/contexts/AuthContext.tsx` — React context providing `user`, `isAuthenticated`, `isLoading`, `signIn()`, `signOut()`
+- [x] Create `src/components/LoginPage.tsx` — email/password form using Radix UI components (Dialog, TextField, Button)
+- [x] Create `src/components/LoginPage.module.css` — styles for login page
+- [x] Create `src/components/ProtectedRoute.tsx` — redirects to login if not authenticated
+- [x] Wire auth context in `App.tsx`, protect main routes
+- [x] Write tests for AuthContext (mock Amplify calls, test sign-in/sign-out state transitions)
+- [x] Write tests for LoginPage (renders form, handles submission, shows errors)
+- [x] Run tests — must pass before next task
 
 ### Task 7: Build redirect management UI
 - [ ] Create `src/lib/api.ts` — API client with auth token injection: `listLinks()`, `createLink(key, value)`, `deleteLink(key)`
