@@ -504,6 +504,220 @@ Resources:
                   - dynamodb:DeleteItem
                 Resource: !GetAtt LinksTable.Arn
 
+  ListLinksFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-${AWS::StackName}-list-links"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref LinksTable
+          ADMIN_ORIGIN: !Sub "https://${AdminDomainName}"
+      Code:
+        ZipFile: |
+          const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
+          const client = new DynamoDBClient();
+          exports.handler = async (event) => {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': process.env.ADMIN_ORIGIN,
+              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+              'Access-Control-Allow-Methods': 'GET,OPTIONS'
+            };
+            try {
+              const result = await client.send(new ScanCommand({ TableName: process.env.TABLE_NAME }));
+              const items = (result.Items || []).map(item => ({
+                key: item.key.S,
+                value: item.value.S
+              })).sort((a, b) => a.key.localeCompare(b.key));
+              return { statusCode: 200, headers, body: JSON.stringify(items) };
+            } catch (err) {
+              console.error('Error listing links:', err);
+              return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal server error' }) };
+            }
+          };
+
+  CreateLinkFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-${AWS::StackName}-create-link"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref LinksTable
+          ADMIN_ORIGIN: !Sub "https://${AdminDomainName}"
+      Code:
+        ZipFile: |
+          const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+          const client = new DynamoDBClient();
+          exports.handler = async (event) => {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': process.env.ADMIN_ORIGIN,
+              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+              'Access-Control-Allow-Methods': 'PUT,DELETE,OPTIONS'
+            };
+            try {
+              const key = event.pathParameters && event.pathParameters.key;
+              if (!key) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing key parameter' }) };
+              }
+              if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid key format. Only alphanumeric characters, hyphens, and underscores are allowed.' }) };
+              }
+              if (key.length > 128) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Key must be 128 characters or fewer' }) };
+              }
+              let body;
+              try {
+                body = JSON.parse(event.body || '{}');
+              } catch (e) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+              }
+              const value = body.value;
+              if (!value || typeof value !== 'string') {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing or invalid value field' }) };
+              }
+              const urlPattern = /^https?:\/\/.+/;
+              const isWildcard = value.endsWith('/*');
+              const urlToValidate = isWildcard ? value.slice(0, -2) : value;
+              if (!urlPattern.test(urlToValidate)) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Value must be a valid HTTP/HTTPS URL' }) };
+              }
+              await client.send(new PutItemCommand({
+                TableName: process.env.TABLE_NAME,
+                Item: { key: { S: key }, value: { S: value } }
+              }));
+              return { statusCode: 200, headers, body: JSON.stringify({ key, value }) };
+            } catch (err) {
+              console.error('Error creating link:', err);
+              return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal server error' }) };
+            }
+          };
+
+  DeleteLinkFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-${AWS::StackName}-delete-link"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref LinksTable
+          ADMIN_ORIGIN: !Sub "https://${AdminDomainName}"
+      Code:
+        ZipFile: |
+          const { DynamoDBClient, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
+          const client = new DynamoDBClient();
+          exports.handler = async (event) => {
+            const headers = {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': process.env.ADMIN_ORIGIN,
+              'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+              'Access-Control-Allow-Methods': 'PUT,DELETE,OPTIONS'
+            };
+            try {
+              const key = event.pathParameters && event.pathParameters.key;
+              if (!key) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing key parameter' }) };
+              }
+              await client.send(new DeleteItemCommand({
+                TableName: process.env.TABLE_NAME,
+                Key: { key: { S: key } }
+              }));
+              return { statusCode: 200, headers, body: JSON.stringify({ deleted: key }) };
+            } catch (err) {
+              console.error('Error deleting link:', err);
+              return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal server error' }) };
+            }
+          };
+
+  ListLinksMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref LinksResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListLinksFunction.Arn}/invocations"
+
+  CreateLinkMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref LinkKeyResource
+      HttpMethod: PUT
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateLinkFunction.Arn}/invocations"
+
+  DeleteLinkMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref LinkKeyResource
+      HttpMethod: DELETE
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteLinkFunction.Arn}/invocations"
+
+  ListLinksPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ListLinksFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/links"
+
+  CreateLinkPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CreateLinkFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/PUT/links/*"
+
+  DeleteLinkPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DeleteLinkFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/DELETE/links/*"
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ListLinksMethod
+      - CreateLinkMethod
+      - DeleteLinkMethod
+      - LinksOptionsMethod
+      - LinkKeyOptionsMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiGateway
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Environment
+
 Outputs:
   WebACLArn:
     Description: ARN of the WAF WebACL
@@ -567,7 +781,7 @@ Outputs:
 
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
     Export:
       Name: !Sub "${AWS::StackName}-ApiEndpoint"
 
