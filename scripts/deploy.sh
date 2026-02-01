@@ -45,7 +45,7 @@ aws cloudformation deploy \
     RateLimitThreshold="$RATE_LIMIT_THRESHOLD" \
     AllowedEmails="$ALLOWED_EMAILS" \
     AdminDomainName="$ADMIN_DOMAIN_NAME" \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset
 
 echo "Deployment complete!"

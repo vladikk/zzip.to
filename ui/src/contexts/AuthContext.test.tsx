@@ -7,40 +7,46 @@ import { AuthProvider, useAuth } from './AuthContext';
 vi.mock('aws-amplify/auth', () => ({
   signIn: vi.fn(),
   signOut: vi.fn(),
+  confirmSignIn: vi.fn(),
   getCurrentUser: vi.fn(),
   fetchAuthSession: vi.fn(),
 }));
 
-import { signIn as amplifySignIn, signOut as amplifySignOut, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
+import { signIn as amplifySignIn, signOut as amplifySignOut, confirmSignIn as amplifyConfirmSignIn, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth';
 
 const mockedGetCurrentUser = vi.mocked(getCurrentUser);
 const mockedFetchAuthSession = vi.mocked(fetchAuthSession);
 const mockedSignIn = vi.mocked(amplifySignIn);
 const mockedSignOut = vi.mocked(amplifySignOut);
+const mockedConfirmSignIn = vi.mocked(amplifyConfirmSignIn);
 
 function TestConsumer() {
-  const { user, isAuthenticated, isLoading, signIn, signOut } = useAuth();
+  const { user, isAuthenticated, isLoading, needsNewPassword, signIn, confirmNewPassword, signOut } = useAuth();
   return (
     <div>
       <div data-testid="loading">{String(isLoading)}</div>
       <div data-testid="authenticated">{String(isAuthenticated)}</div>
+      <div data-testid="needs-new-password">{String(needsNewPassword)}</div>
       <div data-testid="user">{user ? user.email ?? user.username : 'none'}</div>
       <button onClick={() => signIn('test@example.com', 'password123')}>Sign In</button>
+      <button onClick={() => confirmNewPassword('newPassword456')}>Confirm New Password</button>
       <button onClick={() => signOut()}>Sign Out</button>
     </div>
   );
 }
 
 function TestConsumerWithErrorCapture() {
-  const { user, isAuthenticated, isLoading, signIn, signOut } = useAuth();
+  const { user, isAuthenticated, isLoading, needsNewPassword, signIn, confirmNewPassword, signOut } = useAuth();
   const [error, setError] = useState('');
   return (
     <div>
       <div data-testid="loading">{String(isLoading)}</div>
       <div data-testid="authenticated">{String(isAuthenticated)}</div>
+      <div data-testid="needs-new-password">{String(needsNewPassword)}</div>
       <div data-testid="user">{user ? user.email ?? user.username : 'none'}</div>
       <div data-testid="error">{error}</div>
       <button onClick={() => signIn('test@example.com', 'password123').catch((e) => setError(e.message))}>Sign In</button>
+      <button onClick={() => confirmNewPassword('newPassword456').catch((e) => setError(e.message))}>Confirm New Password</button>
       <button onClick={() => signOut()}>Sign Out</button>
     </div>
   );
@@ -146,6 +152,68 @@ describe('AuthContext', () => {
       expect(screen.getByTestId('error')).toHaveTextContent('Sign-in was not completed');
     });
     expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
+  });
+
+  it('signIn sets needsNewPassword when NEW_PASSWORD_REQUIRED challenge returned', async () => {
+    mockedGetCurrentUser.mockRejectedValueOnce(new Error('not authenticated'));
+    mockedSignIn.mockResolvedValue({ isSignedIn: false, nextStep: { signInStep: 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED' } });
+
+    const user = userEvent.setup();
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+
+    await user.click(screen.getByText('Sign In'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('needs-new-password')).toHaveTextContent('true');
+    });
+    expect(screen.getByTestId('authenticated')).toHaveTextContent('false');
+  });
+
+  it('confirmNewPassword completes sign-in after NEW_PASSWORD_REQUIRED', async () => {
+    mockedGetCurrentUser.mockRejectedValueOnce(new Error('not authenticated'));
+    mockedSignIn.mockResolvedValue({ isSignedIn: false, nextStep: { signInStep: 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED' } });
+    mockedConfirmSignIn.mockResolvedValue({ isSignedIn: true, nextStep: { signInStep: 'DONE' } });
+    mockedGetCurrentUser.mockResolvedValue({ username: 'testuser', userId: '123' });
+    mockedFetchAuthSession.mockResolvedValue({
+      tokens: {
+        idToken: { payload: { email: 'test@example.com' } },
+      },
+    } as never);
+
+    const user = userEvent.setup();
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('false');
+    });
+
+    await user.click(screen.getByText('Sign In'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('needs-new-password')).toHaveTextContent('true');
+    });
+
+    await user.click(screen.getByText('Confirm New Password'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated')).toHaveTextContent('true');
+    });
+    expect(screen.getByTestId('needs-new-password')).toHaveTextContent('false');
+    expect(mockedConfirmSignIn).toHaveBeenCalledWith({ challengeResponse: 'newPassword456' });
   });
 
   it('signOut clears user state', async () => {
