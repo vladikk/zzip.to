@@ -81,6 +81,9 @@ function createCreateLinkHandler(tableName, adminOrigin) {
       if (!value || typeof value !== 'string') {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing or invalid value field' }) };
       }
+      if (/[\x00-\x1f\x7f]/.test(value)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Value must not contain control characters' }) };
+      }
       const urlPattern = /^https?:\/\/.+/;
       const isWildcard = value.endsWith('/*');
       const urlToValidate = isWildcard ? value.slice(0, -2) : value;
@@ -380,6 +383,16 @@ describe('CreateLink Lambda', () => {
     const result = await handler(event);
     assert.strictEqual(result.statusCode, 400);
     assert.match(JSON.parse(result.body).error, /Missing or invalid value/);
+  });
+
+  it('should reject URL with control characters', async () => {
+    const event = {
+      pathParameters: { key: 'test' },
+      body: JSON.stringify({ value: 'https://evil.com/path\r\nSet-Cookie: pwned=true' })
+    };
+    const result = await handler(event);
+    assert.strictEqual(result.statusCode, 400);
+    assert.match(JSON.parse(result.body).error, /control characters/);
   });
 });
 
