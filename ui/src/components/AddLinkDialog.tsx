@@ -27,11 +27,16 @@ export default function AddLinkDialog({ open, onClose, onSubmit }: AddLinkDialog
       newErrors.key = keyResult.error.issues[0].message;
     }
 
-    // Allow URLs ending with /* for wildcard redirects
-    const valueToValidate = value.endsWith('/*') ? value.slice(0, -2) : value;
-    const valueResult = linkValueSchema.safeParse(valueToValidate);
-    if (!valueResult.success) {
-      newErrors.value = valueResult.error.issues[0].message;
+    // Check max length on original value (before stripping wildcard) to match backend
+    if (value.length > 1024) {
+      newErrors.value = 'URL must be 1024 characters or fewer';
+    } else {
+      // Allow URLs ending with /* for wildcard redirects
+      const valueToValidate = value.endsWith('/*') ? value.slice(0, -2) : value;
+      const valueResult = linkValueSchema.safeParse(valueToValidate);
+      if (!valueResult.success) {
+        newErrors.value = valueResult.error.issues[0].message;
+      }
     }
 
     setErrors(newErrors);

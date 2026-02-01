@@ -68,8 +68,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await amplifySignOut();
-    setUser(null);
+    try {
+      await amplifySignOut();
+    } finally {
+      setUser(null);
+    }
   }, []);
 
   return (

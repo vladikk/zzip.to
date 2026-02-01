@@ -40,6 +40,7 @@ export default function LinksPage() {
       setDeleteTarget(null);
       await fetchLinks();
     } catch (err) {
+      setDeleteTarget(null);
       setError(err instanceof Error ? err.message : 'Failed to delete link');
     }
   }
