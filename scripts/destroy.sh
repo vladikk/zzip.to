@@ -19,6 +19,19 @@ if [[ -n "$BUCKET" ]]; then
   aws s3 rm "s3://$BUCKET" --recursive || true
 fi
 
+# Empty admin UI bucket (required for deletion)
+ADMIN_BUCKET=$(aws cloudformation describe-stack-resource \
+  --stack-name "$STACK_NAME-$ENVIRONMENT" \
+  --logical-resource-id AdminBucket \
+  --region us-east-1 \
+  --query 'StackResourceDetail.PhysicalResourceId' \
+  --output text 2>/dev/null || echo "")
+
+if [[ -n "$ADMIN_BUCKET" ]]; then
+  echo "Emptying admin UI bucket $ADMIN_BUCKET..."
+  aws s3 rm "s3://$ADMIN_BUCKET" --recursive || true
+fi
+
 aws cloudformation delete-stack \
   --stack-name "$STACK_NAME-$ENVIRONMENT" \
   --region us-east-1

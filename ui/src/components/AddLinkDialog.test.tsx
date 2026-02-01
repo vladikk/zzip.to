@@ -35,7 +35,7 @@ describe('AddLinkDialog', () => {
     await user.type(screen.getByLabelText('Target URL'), 'https://example.com');
     await user.click(screen.getByRole('button', { name: 'Add Link' }));
 
-    expect(screen.getByText('Key must be alphanumeric with hyphens only')).toBeInTheDocument();
+    expect(screen.getByText('Key must be alphanumeric with hyphens and underscores only')).toBeInTheDocument();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 

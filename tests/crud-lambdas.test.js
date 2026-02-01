@@ -39,7 +39,7 @@ function createListLinksHandler(tableName, adminOrigin) {
       if (mockScanError) throw mockScanError;
       lastScanInput = { TableName: tableName };
       const result = mockScanResult;
-      const items = (result.Items || []).map(item => ({
+      const items = (result.Items || []).filter(item => item.key && item.value).map(item => ({
         key: item.key.S,
         value: item.value.S
       })).sort((a, b) => a.key.localeCompare(b.key));
@@ -113,6 +113,9 @@ function createDeleteLinkHandler(tableName, adminOrigin) {
       const key = event.pathParameters && event.pathParameters.key;
       if (!key) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing key parameter' }) };
+      }
+      if (!/^[a-zA-Z0-9_-]+$/.test(key) || key.length > 128) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid key format' }) };
       }
       if (mockDeleteError) throw mockDeleteError;
       lastDeleteInput = {

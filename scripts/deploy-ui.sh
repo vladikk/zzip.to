@@ -27,9 +27,32 @@ ADMIN_DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='AdminDistributionId'].OutputValue" \
   --output text)
 
+USER_POOL_ID=$(aws cloudformation describe-stacks \
+  --stack-name "$FULL_STACK_NAME" \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" \
+  --output text)
+
+USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+  --stack-name "$FULL_STACK_NAME" \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" \
+  --output text)
+
+API_ENDPOINT=$(aws cloudformation describe-stacks \
+  --stack-name "$FULL_STACK_NAME" \
+  --region "$REGION" \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)
+
 if [[ -z "$ADMIN_BUCKET" || -z "$ADMIN_DISTRIBUTION_ID" ]]; then
   echo "Error: Could not fetch AdminBucketName or AdminDistributionId from stack outputs."
   echo "Make sure the stack $FULL_STACK_NAME is deployed with the admin UI resources."
+  exit 1
+fi
+
+if [[ -z "$USER_POOL_ID" || -z "$USER_POOL_CLIENT_ID" || -z "$API_ENDPOINT" ]]; then
+  echo "Error: Could not fetch Cognito or API outputs from stack."
   exit 1
 fi
 
@@ -37,6 +60,9 @@ echo "Admin bucket: $ADMIN_BUCKET"
 echo "Admin distribution: $ADMIN_DISTRIBUTION_ID"
 
 echo "Building UI..."
+export VITE_COGNITO_USER_POOL_ID="$USER_POOL_ID"
+export VITE_COGNITO_CLIENT_ID="$USER_POOL_CLIENT_ID"
+export VITE_API_ENDPOINT="$API_ENDPOINT"
 cd ui
 npm ci
 npm run build

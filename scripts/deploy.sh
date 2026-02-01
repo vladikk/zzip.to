@@ -14,8 +14,10 @@ CERTIFICATE_ARN=${3:-${CERTIFICATE_ARN:-}}
 HOSTED_ZONE_ID=${4:-${HOSTED_ZONE_ID:-}}
 DOMAIN_NAME=${5:-${DOMAIN_NAME:-zzip.to}}
 RATE_LIMIT_THRESHOLD=${RATE_LIMIT_THRESHOLD:-1000}
+ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
+ADMIN_DOMAIN_NAME=${ADMIN_DOMAIN_NAME:-admin.zzip.to}
 
-if [[ -z "$CERTIFICATE_ARN" || -z "$HOSTED_ZONE_ID" ]]; then
+if [[ -z "$CERTIFICATE_ARN" || -z "$HOSTED_ZONE_ID" || -z "$ALLOWED_EMAILS" ]]; then
   echo "Usage: ./scripts/deploy.sh [environment] [stack-name] [certificate-arn] [hosted-zone-id] [domain-name]"
   echo ""
   echo "Parameters can be provided via:"
@@ -41,6 +43,8 @@ aws cloudformation deploy \
     HostedZoneId="$HOSTED_ZONE_ID" \
     DomainName="$DOMAIN_NAME" \
     RateLimitThreshold="$RATE_LIMIT_THRESHOLD" \
+    AllowedEmails="$ALLOWED_EMAILS" \
+    AdminDomainName="$ADMIN_DOMAIN_NAME" \
   --capabilities CAPABILITY_IAM \
   --no-fail-on-empty-changeset
 
