@@ -405,7 +405,10 @@ The admin UI is a React SPA for managing redirect links through a web interface 
 4. **Seed existing redirects** (one-time migration from `data/redirects.json` to DynamoDB):
 
    ```bash
-   ./scripts/seed-dynamodb.sh
+   # Get the table name from stack outputs
+   TABLE_NAME=$(aws cloudformation describe-stacks --stack-name <your-stack-name> --region us-east-1 \
+     --query "Stacks[0].Outputs[?OutputKey=='LinksTableName'].OutputValue" --output text)
+   ./scripts/seed-dynamodb.sh "$TABLE_NAME"
    ```
 
 5. **Build and deploy the UI**:

@@ -561,6 +561,7 @@ Resources:
       Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
       Environment:
         Variables:
           TABLE_NAME: !Ref LinksTable
@@ -624,6 +625,7 @@ Resources:
       Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
       Environment:
         Variables:
           TABLE_NAME: !Ref LinksTable

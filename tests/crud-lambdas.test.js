@@ -84,7 +84,7 @@ function createCreateLinkHandler(tableName, adminOrigin) {
       if (/[\x00-\x1f\x7f]/.test(value)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Value must not contain control characters' }) };
       }
-      const urlPattern = /^https?:\/\/.+/;
+      const urlPattern = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.\-]+(:\d+)?(\/.*)?$/;
       const isWildcard = value.endsWith('/*');
       const urlToValidate = isWildcard ? value.slice(0, -2) : value;
       if (!urlPattern.test(urlToValidate)) {
