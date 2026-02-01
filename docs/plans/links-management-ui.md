@@ -127,14 +127,14 @@
 - [x] Run tests — must pass before next task
 
 ### Task 8: Add UI hosting to CloudFormation
-- [ ] Add `AdminBucket` S3 bucket for UI static files (block public access)
-- [ ] Add `AdminBucketPolicy` allowing CloudFront OAC to read from bucket
-- [ ] Add `AdminDistribution` CloudFront distribution for `admin.${DomainName}` with S3 origin, OAC, and SPA routing (custom error response 403→/index.html)
-- [ ] Add `AdminDNSRecordA` and `AdminDNSRecordAAAA` Route 53 records pointing to admin distribution
-- [ ] Add output: `AdminDistributionId`, `AdminBucketName`
-- [ ] Add `scripts/deploy-ui.sh` — builds UI and syncs to S3, invalidates CloudFront cache
-- [ ] Validate template
-- [ ] Run all tests — must pass before next task
+- [x] Add `AdminBucket` S3 bucket for UI static files (block public access)
+- [x] Add `AdminBucketPolicy` allowing CloudFront OAC to read from bucket
+- [x] Add `AdminDistribution` CloudFront distribution for `admin.${DomainName}` with S3 origin, OAC, and SPA routing (custom error response 403→/index.html)
+- [x] Add `AdminDNSRecordA` and `AdminDNSRecordAAAA` Route 53 records pointing to admin distribution
+- [x] Add output: `AdminDistributionId`, `AdminBucketName`
+- [x] Add `scripts/deploy-ui.sh` — builds UI and syncs to S3, invalidates CloudFront cache
+- [x] Validate template
+- [x] Run all tests — must pass before next task
 
 ### Task 9: Seed DynamoDB from existing redirects.json
 - [ ] Create `scripts/seed-dynamodb.sh` — reads `data/redirects.json` and batch-writes items to DynamoDB LinksTable
