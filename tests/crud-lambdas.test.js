@@ -84,6 +84,9 @@ function createCreateLinkHandler(tableName, adminOrigin) {
       if (/[\x00-\x1f\x7f]/.test(value)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Value must not contain control characters' }) };
       }
+      if (value.length > 1024) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'URL must be 1024 characters or fewer' }) };
+      }
       const urlPattern = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.\-]+(:\d+)?(\/.*)?$/;
       const isWildcard = value.endsWith('/*');
       const urlToValidate = isWildcard ? value.slice(0, -2) : value;
@@ -383,6 +386,27 @@ describe('CreateLink Lambda', () => {
     const result = await handler(event);
     assert.strictEqual(result.statusCode, 400);
     assert.match(JSON.parse(result.body).error, /Missing or invalid value/);
+  });
+
+  it('should reject value longer than 1024 characters', async () => {
+    const event = {
+      pathParameters: { key: 'test' },
+      body: JSON.stringify({ value: 'https://example.com/' + 'a'.repeat(1010) })
+    };
+    const result = await handler(event);
+    assert.strictEqual(result.statusCode, 400);
+    assert.match(JSON.parse(result.body).error, /1024 characters/);
+  });
+
+  it('should accept value exactly 1024 characters', async () => {
+    const value = 'https://example.com/' + 'a'.repeat(1004);
+    assert.strictEqual(value.length, 1024);
+    const event = {
+      pathParameters: { key: 'test' },
+      body: JSON.stringify({ value })
+    };
+    const result = await handler(event);
+    assert.strictEqual(result.statusCode, 200);
   });
 
   it('should reject URL with control characters', async () => {
