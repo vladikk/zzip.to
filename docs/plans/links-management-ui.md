@@ -39,18 +39,18 @@
 ## Implementation Steps
 
 ### Task 1: Add Cognito User Pool to CloudFormation
-- [ ] Add `AllowedEmails` parameter (comma-separated list of whitelisted email addresses)
-- [ ] Add `CognitoUserPool` resource with email as username/alias, password policy, and self-signup disabled
-- [ ] Add `CognitoUserPoolClient` resource (no secret, explicit auth flows: `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`)
-- [ ] Add `CognitoDomain` resource for hosted UI (`${Environment}-zzip-to`)
-- [ ] Add `PreAuthLambdaRole` IAM role with basic Lambda execution permissions
-- [ ] Add `PreAuthLambda` function (inline Node.js 20.x) that checks `event.request.userAttributes.email` against the whitelisted emails parameter
-- [ ] Add `PreAuthLambdaPermission` to allow Cognito to invoke the Lambda
-- [ ] Wire pre-auth Lambda as `PreAuthentication` trigger on the User Pool
-- [ ] Add outputs: `UserPoolId`, `UserPoolClientId`, `CognitoDomain`
-- [ ] Validate template with `aws cloudformation validate-template`
-- [ ] Write tests for pre-auth Lambda logic (allowed email passes, disallowed email rejected)
-- [ ] Run existing tests — must pass before next task
+- [x] Add `AllowedEmails` parameter (comma-separated list of whitelisted email addresses)
+- [x] Add `CognitoUserPool` resource with email as username/alias, password policy, and self-signup disabled
+- [x] Add `CognitoUserPoolClient` resource (no secret, explicit auth flows: `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`)
+- [x] Add `CognitoDomain` resource for hosted UI (`${Environment}-zzip-to`)
+- [x] Add `PreAuthLambdaRole` IAM role with basic Lambda execution permissions
+- [x] Add `PreAuthLambda` function (inline Node.js 20.x) that checks `event.request.userAttributes.email` against the whitelisted emails parameter
+- [x] Add `PreAuthLambdaPermission` to allow Cognito to invoke the Lambda
+- [x] Wire pre-auth Lambda as `PreAuthentication` trigger on the User Pool
+- [x] Add outputs: `UserPoolId`, `UserPoolClientId`, `CognitoDomain`
+- [x] Validate template with `aws cloudformation validate-template`
+- [x] Write tests for pre-auth Lambda logic (allowed email passes, disallowed email rejected)
+- [x] Run existing tests — must pass before next task
 
 ### Task 2: Add DynamoDB table and API Gateway to CloudFormation
 - [ ] Add `LinksTable` DynamoDB resource (PAY_PER_REQUEST, hash key `key` of type String)
