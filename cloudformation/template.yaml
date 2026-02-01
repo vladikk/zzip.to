@@ -393,6 +393,7 @@ Resources:
 
   LinksTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-${AWS::StackName}-links"
       BillingMode: PAY_PER_REQUEST
@@ -532,8 +533,16 @@ Resources:
               'Access-Control-Allow-Methods': 'GET,OPTIONS'
             };
             try {
-              const result = await client.send(new ScanCommand({ TableName: process.env.TABLE_NAME }));
-              const items = (result.Items || []).filter(item => item.key && item.value).map(item => ({
+              let allItems = [];
+              let lastKey;
+              do {
+                const params = { TableName: process.env.TABLE_NAME };
+                if (lastKey) params.ExclusiveStartKey = lastKey;
+                const result = await client.send(new ScanCommand(params));
+                allItems = allItems.concat(result.Items || []);
+                lastKey = result.LastEvaluatedKey;
+              } while (lastKey);
+              const items = allItems.filter(item => item.key && item.value).map(item => ({
                 key: item.key.S,
                 value: item.value.S
               })).sort((a, b) => a.key.localeCompare(b.key));
@@ -587,7 +596,7 @@ Resources:
               if (!value || typeof value !== 'string') {
                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing or invalid value field' }) };
               }
-              const urlPattern = /^https?:\/\/.+/;
+              const urlPattern = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.\-]+(\/.*)?$/;
               const isWildcard = value.endsWith('/*');
               const urlToValidate = isWildcard ? value.slice(0, -2) : value;
               if (!urlPattern.test(urlToValidate)) {
@@ -828,6 +837,7 @@ Resources:
       StartingPosition: TRIM_HORIZON
       BatchSize: 10
       MaximumRetryAttempts: 3
+      BisectBatchOnFunctionError: true
 
   AdminBucket:
     Type: AWS::S3::Bucket

@@ -52,16 +52,25 @@ flush_batch() {
     --request-items "$request_json" \
     --output json)
 
-  # Check for unprocessed items
+  # Check for unprocessed items and retry with backoff
   local unprocessed
   unprocessed=$(echo "$response" | jq -r ".UnprocessedItems.\"$TABLE_NAME\" // [] | length")
-  if [[ "$unprocessed" -gt 0 ]]; then
-    echo "  WARNING: $unprocessed items were not processed in this batch. Retrying..."
-    sleep 1
-    aws dynamodb batch-write-item \
+  local retry_count=0
+  local max_retries=5
+  while [[ "$unprocessed" -gt 0 && "$retry_count" -lt "$max_retries" ]]; do
+    retry_count=$((retry_count + 1))
+    local sleep_time=$((retry_count * 2))
+    echo "  WARNING: $unprocessed items unprocessed. Retry $retry_count/$max_retries (backoff ${sleep_time}s)..."
+    sleep "$sleep_time"
+    response=$(aws dynamodb batch-write-item \
       --region us-east-1 \
       --request-items "$(echo "$response" | jq '.UnprocessedItems')" \
-      --output text > /dev/null
+      --output json)
+    unprocessed=$(echo "$response" | jq -r ".UnprocessedItems.\"$TABLE_NAME\" // [] | length")
+  done
+  if [[ "$unprocessed" -gt 0 ]]; then
+    echo "  ERROR: $unprocessed items still unprocessed after $max_retries retries. Aborting."
+    exit 1
   fi
 
   WRITTEN=$((WRITTEN + ${#BATCH[@]}))
