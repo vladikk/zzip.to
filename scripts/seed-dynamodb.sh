@@ -39,25 +39,30 @@ flush_batch() {
     return
   fi
 
-  # Build the request items JSON
-  local request_items="["
-  local first=true
-  for item in "${BATCH[@]}"; do
-    if [[ "$first" == "true" ]]; then
-      first=false
-    else
-      request_items+=","
-    fi
-    request_items+="$item"
-  done
-  request_items+="]"
+  # Build the request items JSON using jq for safe escaping
+  local request_items
+  request_items=$(printf '%s\n' "${BATCH[@]}" | jq -s '.')
 
-  local request_json="{\"$TABLE_NAME\": $request_items}"
+  local request_json
+  request_json=$(jq -n --arg table "$TABLE_NAME" --argjson items "$request_items" '{($table): $items}')
 
-  aws dynamodb batch-write-item \
+  local response
+  response=$(aws dynamodb batch-write-item \
     --region us-east-1 \
     --request-items "$request_json" \
-    --output text > /dev/null
+    --output json)
+
+  # Check for unprocessed items
+  local unprocessed
+  unprocessed=$(echo "$response" | jq -r ".UnprocessedItems.\"$TABLE_NAME\" // [] | length")
+  if [[ "$unprocessed" -gt 0 ]]; then
+    echo "  WARNING: $unprocessed items were not processed in this batch. Retrying..."
+    sleep 1
+    aws dynamodb batch-write-item \
+      --region us-east-1 \
+      --request-items "$(echo "$response" | jq '.UnprocessedItems')" \
+      --output text > /dev/null
+  fi
 
   WRITTEN=$((WRITTEN + ${#BATCH[@]}))
   echo "  Written $WRITTEN / $ITEM_COUNT items..."
@@ -65,10 +70,8 @@ flush_batch() {
 }
 
 while read -r item; do
-  KEY=$(echo "$item" | jq -r '.key')
-  VALUE=$(echo "$item" | jq -r '.value')
-
-  PUT_REQUEST="{\"PutRequest\":{\"Item\":{\"key\":{\"S\":\"$KEY\"},\"value\":{\"S\":\"$VALUE\"}}}}"
+  # Use jq for safe JSON construction to avoid injection via special characters
+  PUT_REQUEST=$(echo "$item" | jq -c '{PutRequest: {Item: {key: {S: .key}, value: {S: .value}}}}')
   BATCH+=("$PUT_REQUEST")
 
   if [[ ${#BATCH[@]} -ge $BATCH_SIZE ]]; then

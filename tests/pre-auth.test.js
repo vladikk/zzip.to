@@ -4,7 +4,10 @@ const assert = require('node:assert');
 // Replicate the pre-auth Lambda logic from CloudFormation inline code
 function createHandler(allowedEmailsEnv) {
   return async (event) => {
-    const allowedEmails = allowedEmailsEnv.split(',').map(e => e.trim().toLowerCase());
+    const allowedEmails = (allowedEmailsEnv || '').split(',').map(e => e.trim().toLowerCase()).filter(e => e.length > 0);
+    if (allowedEmails.length === 0) {
+      throw new Error('No allowed emails configured');
+    }
     const email = (event.request.userAttributes.email || '').toLowerCase();
     if (!allowedEmails.includes(email)) {
       throw new Error('User is not authorized');
@@ -95,6 +98,33 @@ describe('Pre-Auth Lambda', () => {
       await assert.rejects(
         () => handler(event),
         { message: 'User is not authorized' }
+      );
+    });
+
+    it('should reject all emails when AllowedEmails is empty string', async () => {
+      const handler = createHandler('');
+      const event = makeEvent('admin@example.com');
+      await assert.rejects(
+        () => handler(event),
+        { message: 'No allowed emails configured' }
+      );
+    });
+
+    it('should reject all emails when AllowedEmails is undefined', async () => {
+      const handler = createHandler(undefined);
+      const event = makeEvent('admin@example.com');
+      await assert.rejects(
+        () => handler(event),
+        { message: 'No allowed emails configured' }
+      );
+    });
+
+    it('should reject when AllowedEmails contains only whitespace', async () => {
+      const handler = createHandler('  ,  , ');
+      const event = makeEvent('admin@example.com');
+      await assert.rejects(
+        () => handler(event),
+        { message: 'No allowed emails configured' }
       );
     });
   });

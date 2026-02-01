@@ -26,6 +26,9 @@ function resetMocks() {
   describeCallCount = 0;
 }
 
+let mockPutETag = 'mock-etag-after-put';
+let mockDeleteETag = 'mock-etag-after-delete';
+
 // Mock send function
 function mockSend(command) {
   if (command._type === 'DescribeKeyValueStore') {
@@ -38,13 +41,13 @@ function mockSend(command) {
     putCallCount++;
     lastPutInput = command.input;
     if (mockPutError) throw mockPutError;
-    return {};
+    return { ETag: mockPutETag };
   }
   if (command._type === 'DeleteKey') {
     deleteCallCount++;
     lastDeleteInput = command.input;
     if (mockDeleteError) throw mockDeleteError;
-    return {};
+    return { ETag: mockDeleteETag };
   }
   throw new Error(`Unknown command: ${command._type}`);
 }
@@ -68,6 +71,7 @@ function createKvsSyncHandler(kvsArn) {
   }
 
   return async (event) => {
+    let currentEtag = await getETag();
     for (const record of event.Records) {
       const eventName = record.eventName;
       try {
@@ -75,22 +79,22 @@ function createKvsSyncHandler(kvsArn) {
           const newImage = record.dynamodb.NewImage;
           const key = newImage.key.S;
           const value = newImage.value.S;
-          const etag = await getETag();
-          await mockSend(new PutKeyCommand({
+          const result = await mockSend(new PutKeyCommand({
             KvsARN: kvsArn,
             Key: key,
             Value: value,
-            IfMatch: etag
+            IfMatch: currentEtag
           }));
+          currentEtag = result.ETag;
         } else if (eventName === 'REMOVE') {
           const oldImage = record.dynamodb.OldImage;
           const key = oldImage.key.S;
-          const etag = await getETag();
-          await mockSend(new DeleteKeyCommand({
+          const result = await mockSend(new DeleteKeyCommand({
             KvsARN: kvsArn,
             Key: key,
-            IfMatch: etag
+            IfMatch: currentEtag
           }));
+          currentEtag = result.ETag;
         }
       } catch (err) {
         console.error(`Error processing ${eventName} for record:`, JSON.stringify(record), err);
@@ -250,12 +254,12 @@ describe('KVS Sync Lambda', () => {
 
       assert.strictEqual(putCallCount, 2);
       assert.strictEqual(deleteCallCount, 1);
-      assert.strictEqual(describeCallCount, 3);
+      assert.strictEqual(describeCallCount, 1);
     });
   });
 
   describe('ETag handling', () => {
-    it('should fetch ETag before each KVS operation', async () => {
+    it('should fetch ETag once before processing records', async () => {
       const event = {
         Records: [{
           eventName: 'INSERT',
@@ -272,6 +276,37 @@ describe('KVS Sync Lambda', () => {
 
       assert.strictEqual(describeCallCount, 1);
       assert.deepStrictEqual(lastDescribeInput, { KvsARN: TEST_KVS_ARN });
+    });
+
+    it('should use returned ETag from previous operation for next operation', async () => {
+      const event = {
+        Records: [
+          {
+            eventName: 'INSERT',
+            dynamodb: {
+              NewImage: {
+                key: { S: 'first' },
+                value: { S: 'https://first.com' }
+              }
+            }
+          },
+          {
+            eventName: 'INSERT',
+            dynamodb: {
+              NewImage: {
+                key: { S: 'second' },
+                value: { S: 'https://second.com' }
+              }
+            }
+          }
+        ]
+      };
+
+      await handler(event);
+
+      // Should only describe once (at the start), not per-record
+      assert.strictEqual(describeCallCount, 1);
+      assert.strictEqual(putCallCount, 2);
     });
   });
 
@@ -346,7 +381,8 @@ describe('KVS Sync Lambda', () => {
 
       assert.strictEqual(putCallCount, 0);
       assert.strictEqual(deleteCallCount, 0);
-      assert.strictEqual(describeCallCount, 0);
+      // ETag is fetched once at the start regardless of event types
+      assert.strictEqual(describeCallCount, 1);
     });
   });
 });

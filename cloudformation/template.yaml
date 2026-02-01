@@ -336,7 +336,10 @@ Resources:
       Code:
         ZipFile: |
           exports.handler = async (event) => {
-            const allowedEmails = process.env.ALLOWED_EMAILS.split(',').map(e => e.trim().toLowerCase());
+            const allowedEmails = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(e => e.length > 0);
+            if (allowedEmails.length === 0) {
+              throw new Error('No allowed emails configured');
+            }
             const email = (event.request.userAttributes.email || '').toLowerCase();
             if (!allowedEmails.includes(email)) {
               throw new Error('User is not authorized');
@@ -530,7 +533,7 @@ Resources:
             };
             try {
               const result = await client.send(new ScanCommand({ TableName: process.env.TABLE_NAME }));
-              const items = (result.Items || []).map(item => ({
+              const items = (result.Items || []).filter(item => item.key && item.value).map(item => ({
                 key: item.key.S,
                 value: item.value.S
               })).sort((a, b) => a.key.localeCompare(b.key));
@@ -627,6 +630,9 @@ Resources:
               const key = event.pathParameters && event.pathParameters.key;
               if (!key) {
                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing key parameter' }) };
+              }
+              if (!/^[a-zA-Z0-9_-]+$/.test(key) || key.length > 128) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid key format' }) };
               }
               await client.send(new DeleteItemCommand({
                 TableName: process.env.TABLE_NAME,
@@ -780,6 +786,7 @@ Resources:
 
           exports.handler = async (event) => {
             const kvsArn = process.env.KVS_ARN;
+            let currentEtag = await getETag(kvsArn);
             for (const record of event.Records) {
               const eventName = record.eventName;
               try {
@@ -787,23 +794,23 @@ Resources:
                   const newImage = record.dynamodb.NewImage;
                   const key = newImage.key.S;
                   const value = newImage.value.S;
-                  const etag = await getETag(kvsArn);
-                  await client.send(new PutKeyCommand({
+                  const result = await client.send(new PutKeyCommand({
                     KvsARN: kvsArn,
                     Key: key,
                     Value: value,
-                    IfMatch: etag
+                    IfMatch: currentEtag
                   }));
+                  currentEtag = result.ETag;
                   console.log(`KVS put: ${key} -> ${value}`);
                 } else if (eventName === 'REMOVE') {
                   const oldImage = record.dynamodb.OldImage;
                   const key = oldImage.key.S;
-                  const etag = await getETag(kvsArn);
-                  await client.send(new DeleteKeyCommand({
+                  const result = await client.send(new DeleteKeyCommand({
                     KvsARN: kvsArn,
                     Key: key,
-                    IfMatch: etag
+                    IfMatch: currentEtag
                   }));
+                  currentEtag = result.ETag;
                   console.log(`KVS delete: ${key}`);
                 }
               } catch (err) {
