@@ -143,14 +143,14 @@
 - [x] Run all tests — must pass before next task
 
 ### Task 10: Verify acceptance criteria
-- [ ] Verify all CloudFormation resources are correctly defined and template validates
-- [ ] Verify CORS is correctly configured end-to-end (preflight + response headers)
-- [ ] Verify pre-auth Lambda rejects non-whitelisted emails
-- [ ] Verify KVS sync handles all DynamoDB stream event types (INSERT, MODIFY, REMOVE)
-- [ ] Run full backend test suite
-- [ ] Run full frontend test suite (`npm test` in ui/)
-- [ ] Run linter — all issues must be fixed
-- [ ] Verify all wildcard redirect patterns still work after migration
+- [x] Verify all CloudFormation resources are correctly defined and template validates
+- [x] Verify CORS is correctly configured end-to-end (preflight + response headers)
+- [x] Verify pre-auth Lambda rejects non-whitelisted emails
+- [x] Verify KVS sync handles all DynamoDB stream event types (INSERT, MODIFY, REMOVE)
+- [x] Run full backend test suite
+- [x] Run full frontend test suite (`npm test` in ui/)
+- [x] Run linter — all issues must be fixed
+- [x] Verify all wildcard redirect patterns still work after migration
 
 ### Task 11: [Final] Update documentation
 - [ ] Update README.md with admin UI setup instructions (Cognito user creation, env vars, deployment)
