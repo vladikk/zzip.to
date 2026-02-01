@@ -53,16 +53,16 @@
 - [x] Run existing tests — must pass before next task
 
 ### Task 2: Add DynamoDB table and API Gateway to CloudFormation
-- [ ] Add `LinksTable` DynamoDB resource (PAY_PER_REQUEST, hash key `key` of type String)
-- [ ] Add `ApiGateway` REST API resource
-- [ ] Add `CognitoAuthorizer` on the API Gateway referencing the User Pool
-- [ ] Add API resources: `/links` and `/links/{key}`
-- [ ] Add `OPTIONS` methods on both resources with mock integration for CORS preflight
-- [ ] Add `AdminDomainName` parameter (default: `admin.zzip.to`) for CORS origin
-- [ ] Add `LambdaExecutionRole` IAM role with DynamoDB permissions (Scan, GetItem, PutItem, DeleteItem) and CloudWatch Logs
-- [ ] Add outputs: `ApiEndpoint`, `LinksTableName`
-- [ ] Validate template
-- [ ] Run existing tests — must pass before next task
+- [x] Add `LinksTable` DynamoDB resource (PAY_PER_REQUEST, hash key `key` of type String)
+- [x] Add `ApiGateway` REST API resource
+- [x] Add `CognitoAuthorizer` on the API Gateway referencing the User Pool
+- [x] Add API resources: `/links` and `/links/{key}`
+- [x] Add `OPTIONS` methods on both resources with mock integration for CORS preflight
+- [x] Add `AdminDomainName` parameter (default: `admin.zzip.to`) for CORS origin
+- [x] Add `LambdaExecutionRole` IAM role with DynamoDB permissions (Scan, GetItem, PutItem, DeleteItem) and CloudWatch Logs
+- [x] Add outputs: `ApiEndpoint`, `LinksTableName`
+- [x] Validate template
+- [x] Run existing tests — must pass before next task
 
 ### Task 3: Add Lambda CRUD handlers to CloudFormation
 - [ ] Add `ListLinksFunction` Lambda (GET /links) — scans DynamoDB, returns sorted JSON array
