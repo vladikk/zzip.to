@@ -30,7 +30,7 @@ export default function LinksPage() {
 
   async function handleCreate(key: string, value: string) {
     await createLink(key, value);
-    await fetchLinks();
+    fetchLinks();
   }
 
   async function handleDelete() {

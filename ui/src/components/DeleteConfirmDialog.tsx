@@ -23,8 +23,8 @@ export default function DeleteConfirmDialog({ open, linkKey, onClose, onConfirm 
   }
 
   return (
-    <div className={styles.overlay} onClick={isDeleting ? undefined : onClose}>
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()} role="alertdialog" aria-label="Delete Link">
+    <div className={styles.overlay} onClick={isDeleting ? undefined : onClose} onKeyDown={(e) => { if (e.key === 'Escape' && !isDeleting) onClose(); }}>
+      <div className={styles.dialog} onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true" aria-label="Delete Link">
         <h2 className={styles.title}>Delete Link</h2>
         <p>Are you sure you want to delete the link <strong>{linkKey}</strong>? This action cannot be undone.</p>
         <div className={styles.actions}>

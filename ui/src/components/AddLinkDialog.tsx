@@ -71,8 +71,8 @@ export default function AddLinkDialog({ open, onClose, onSubmit }: AddLinkDialog
   }
 
   return (
-    <div className={styles.overlay} onClick={handleClose}>
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add Link">
+    <div className={styles.overlay} onClick={handleClose} onKeyDown={(e) => { if (e.key === 'Escape') handleClose(); }}>
+      <div className={styles.dialog} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Add Link">
         <h2 className={styles.title}>Add Link</h2>
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
