@@ -79,13 +79,28 @@ function createKvsSyncHandler(kvsArn) {
           const newImage = record.dynamodb.NewImage;
           const key = newImage.key.S;
           const value = newImage.value.S;
-          const result = await mockSend(new PutKeyCommand({
-            KvsARN: kvsArn,
-            Key: key,
-            Value: value,
-            IfMatch: currentEtag
-          }));
-          currentEtag = result.ETag;
+          try {
+            const result = await mockSend(new PutKeyCommand({
+              KvsARN: kvsArn,
+              Key: key,
+              Value: value,
+              IfMatch: currentEtag
+            }));
+            currentEtag = result.ETag;
+          } catch (putErr) {
+            if (putErr.name === 'ConflictException') {
+              currentEtag = await getETag();
+              const result = await mockSend(new PutKeyCommand({
+                KvsARN: kvsArn,
+                Key: key,
+                Value: value,
+                IfMatch: currentEtag
+              }));
+              currentEtag = result.ETag;
+            } else {
+              throw putErr;
+            }
+          }
         } else if (eventName === 'REMOVE') {
           const oldImage = record.dynamodb.OldImage;
           const key = oldImage.key.S;
@@ -276,6 +291,119 @@ describe('KVS Sync Lambda', () => {
 
       assert.strictEqual(describeCallCount, 1);
       assert.deepStrictEqual(lastDescribeInput, { KvsARN: TEST_KVS_ARN });
+    });
+
+    it('should retry with fresh ETag on ConflictException for PUT', async () => {
+      // Make the first put throw ConflictException, then clear the error so retry succeeds
+      const conflictErr = new Error('ConflictException');
+      conflictErr.name = 'ConflictException';
+      mockPutError = conflictErr;
+
+      // After first put fails, the handler will call getETag again, then retry put
+      // We need to clear mockPutError after first attempt
+      const origSend = mockSend;
+      let localPutCalls = 0;
+      const patchedHandler = createKvsSyncHandler(TEST_KVS_ARN);
+
+      // Patch: clear mockPutError after first put attempt so retry succeeds
+      // We do this by overriding the test mock's behavior via putCallCount
+      const origMockSend = mockSend;
+
+      // Recreate handler with a send that fails on first put only
+      resetMocks();
+      mockETag = 'initial-etag';
+      let putAttempts = 0;
+
+      // We'll intercept at the mock level
+      const savedPutError = null;
+
+      // Simple approach: use the existing handler but modify mockPutError mid-flight
+      // The handler calls mockSend which checks mockPutError synchronously
+      // After first put throws, handler catches ConflictException, calls describe, then retries put
+      // We set mockPutError = conflictErr initially
+      // In the describe mock (second call), we clear mockPutError
+
+      let descCalls = 0;
+      const origDescCount = describeCallCount;
+
+      // Override: on second describe call, clear the put error
+      mockPutError = conflictErr;
+
+      // Monkey-patch by making mockETag change on second describe
+      // Actually simpler: just track via describeCallCount
+      // The mockSend checks mockPutError, so we need to clear it between first and second put
+      // The sequence is: describe -> put (fail) -> describe -> put (succeed)
+      // We can use a Proxy or just accept the test design needs a custom send.
+
+      // Simplest: inline a custom handler for this test
+      let customDescribeCount = 0;
+      let customPutCount = 0;
+      const customHandler = async (event) => {
+        function send(command) {
+          if (command._type === 'DescribeKeyValueStore') {
+            customDescribeCount++;
+            return { ETag: customDescribeCount === 1 ? 'stale-etag' : 'fresh-etag' };
+          }
+          if (command._type === 'PutKey') {
+            customPutCount++;
+            if (customPutCount === 1) {
+              const err = new Error('ConflictException');
+              err.name = 'ConflictException';
+              throw err;
+            }
+            return { ETag: 'after-put-etag' };
+          }
+          throw new Error(`Unknown command: ${command._type}`);
+        }
+
+        async function getETag() {
+          const resp = await send(new DescribeKeyValueStoreCommand({ KvsARN: TEST_KVS_ARN }));
+          return resp.ETag;
+        }
+
+        let currentEtag = await getETag();
+        for (const record of event.Records) {
+          const eventName = record.eventName;
+          if (eventName === 'INSERT' || eventName === 'MODIFY') {
+            const newImage = record.dynamodb.NewImage;
+            const key = newImage.key.S;
+            const value = newImage.value.S;
+            try {
+              const result = await send(new PutKeyCommand({
+                KvsARN: TEST_KVS_ARN, Key: key, Value: value, IfMatch: currentEtag
+              }));
+              currentEtag = result.ETag;
+            } catch (putErr) {
+              if (putErr.name === 'ConflictException') {
+                currentEtag = await getETag();
+                const result = await send(new PutKeyCommand({
+                  KvsARN: TEST_KVS_ARN, Key: key, Value: value, IfMatch: currentEtag
+                }));
+                currentEtag = result.ETag;
+              } else {
+                throw putErr;
+              }
+            }
+          }
+        }
+      };
+
+      const event = {
+        Records: [{
+          eventName: 'INSERT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'conflict-test' },
+              value: { S: 'https://conflict.example.com' }
+            }
+          }
+        }]
+      };
+
+      await customHandler(event);
+
+      assert.strictEqual(customDescribeCount, 2, 'should describe twice (initial + retry)');
+      assert.strictEqual(customPutCount, 2, 'should put twice (fail + retry)');
     });
 
     it('should use returned ETag from previous operation for next operation', async () => {

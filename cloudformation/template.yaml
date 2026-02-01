@@ -394,6 +394,7 @@ Resources:
   LinksTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "${Environment}-${AWS::StackName}-links"
       BillingMode: PAY_PER_REQUEST
@@ -812,13 +813,29 @@ Resources:
                   const newImage = record.dynamodb.NewImage;
                   const key = newImage.key.S;
                   const value = newImage.value.S;
-                  const result = await client.send(new PutKeyCommand({
-                    KvsARN: kvsArn,
-                    Key: key,
-                    Value: value,
-                    IfMatch: currentEtag
-                  }));
-                  currentEtag = result.ETag;
+                  try {
+                    const result = await client.send(new PutKeyCommand({
+                      KvsARN: kvsArn,
+                      Key: key,
+                      Value: value,
+                      IfMatch: currentEtag
+                    }));
+                    currentEtag = result.ETag;
+                  } catch (putErr) {
+                    if (putErr.name === 'ConflictException') {
+                      console.log(`ETag conflict for key ${key}, retrying with fresh ETag`);
+                      currentEtag = await getETag(kvsArn);
+                      const result = await client.send(new PutKeyCommand({
+                        KvsARN: kvsArn,
+                        Key: key,
+                        Value: value,
+                        IfMatch: currentEtag
+                      }));
+                      currentEtag = result.ETag;
+                    } else {
+                      throw putErr;
+                    }
+                  }
                   console.log(`KVS put: ${key} -> ${value}`);
                 } else if (eventName === 'REMOVE') {
                   const oldImage = record.dynamodb.OldImage;
