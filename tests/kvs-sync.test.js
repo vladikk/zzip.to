@@ -1,0 +1,352 @@
+const { describe, it, beforeEach } = require('node:test');
+const assert = require('node:assert');
+
+// --- Mock CloudFront KeyValueStore client ---
+let lastDescribeInput = null;
+let lastPutInput = null;
+let lastDeleteInput = null;
+let mockETag = 'mock-etag-123';
+let mockDescribeError = null;
+let mockPutError = null;
+let mockDeleteError = null;
+let putCallCount = 0;
+let deleteCallCount = 0;
+let describeCallCount = 0;
+
+function resetMocks() {
+  lastDescribeInput = null;
+  lastPutInput = null;
+  lastDeleteInput = null;
+  mockETag = 'mock-etag-123';
+  mockDescribeError = null;
+  mockPutError = null;
+  mockDeleteError = null;
+  putCallCount = 0;
+  deleteCallCount = 0;
+  describeCallCount = 0;
+}
+
+// Mock send function
+function mockSend(command) {
+  if (command._type === 'DescribeKeyValueStore') {
+    describeCallCount++;
+    lastDescribeInput = command.input;
+    if (mockDescribeError) throw mockDescribeError;
+    return { ETag: mockETag };
+  }
+  if (command._type === 'PutKey') {
+    putCallCount++;
+    lastPutInput = command.input;
+    if (mockPutError) throw mockPutError;
+    return {};
+  }
+  if (command._type === 'DeleteKey') {
+    deleteCallCount++;
+    lastDeleteInput = command.input;
+    if (mockDeleteError) throw mockDeleteError;
+    return {};
+  }
+  throw new Error(`Unknown command: ${command._type}`);
+}
+
+// Command constructors matching the SDK pattern
+function DescribeKeyValueStoreCommand(input) {
+  return { _type: 'DescribeKeyValueStore', input };
+}
+function PutKeyCommand(input) {
+  return { _type: 'PutKey', input };
+}
+function DeleteKeyCommand(input) {
+  return { _type: 'DeleteKey', input };
+}
+
+// --- Replicate KVS sync handler logic from CloudFormation inline code ---
+function createKvsSyncHandler(kvsArn) {
+  async function getETag() {
+    const resp = await mockSend(new DescribeKeyValueStoreCommand({ KvsARN: kvsArn }));
+    return resp.ETag;
+  }
+
+  return async (event) => {
+    for (const record of event.Records) {
+      const eventName = record.eventName;
+      try {
+        if (eventName === 'INSERT' || eventName === 'MODIFY') {
+          const newImage = record.dynamodb.NewImage;
+          const key = newImage.key.S;
+          const value = newImage.value.S;
+          const etag = await getETag();
+          await mockSend(new PutKeyCommand({
+            KvsARN: kvsArn,
+            Key: key,
+            Value: value,
+            IfMatch: etag
+          }));
+        } else if (eventName === 'REMOVE') {
+          const oldImage = record.dynamodb.OldImage;
+          const key = oldImage.key.S;
+          const etag = await getETag();
+          await mockSend(new DeleteKeyCommand({
+            KvsARN: kvsArn,
+            Key: key,
+            IfMatch: etag
+          }));
+        }
+      } catch (err) {
+        console.error(`Error processing ${eventName} for record:`, JSON.stringify(record), err);
+        throw err;
+      }
+    }
+  };
+}
+
+const TEST_KVS_ARN = 'arn:aws:cloudfront::123456789012:key-value-store/test-kvs';
+
+describe('KVS Sync Lambda', () => {
+  let handler;
+
+  beforeEach(() => {
+    resetMocks();
+    handler = createKvsSyncHandler(TEST_KVS_ARN);
+  });
+
+  describe('INSERT events', () => {
+    it('should put key in KVS when a new item is inserted', async () => {
+      const event = {
+        Records: [{
+          eventName: 'INSERT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'gh' },
+              value: { S: 'https://github.com' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(describeCallCount, 1);
+      assert.strictEqual(putCallCount, 1);
+      assert.deepStrictEqual(lastPutInput, {
+        KvsARN: TEST_KVS_ARN,
+        Key: 'gh',
+        Value: 'https://github.com',
+        IfMatch: 'mock-etag-123'
+      });
+    });
+
+    it('should handle wildcard redirect values', async () => {
+      const event = {
+        Records: [{
+          eventName: 'INSERT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'docs' },
+              value: { S: 'https://docs.example.com/*' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(putCallCount, 1);
+      assert.strictEqual(lastPutInput.Value, 'https://docs.example.com/*');
+    });
+  });
+
+  describe('MODIFY events', () => {
+    it('should update key in KVS when an item is modified', async () => {
+      const event = {
+        Records: [{
+          eventName: 'MODIFY',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'gh' },
+              value: { S: 'https://github.com/new-org' }
+            },
+            OldImage: {
+              key: { S: 'gh' },
+              value: { S: 'https://github.com' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(putCallCount, 1);
+      assert.deepStrictEqual(lastPutInput, {
+        KvsARN: TEST_KVS_ARN,
+        Key: 'gh',
+        Value: 'https://github.com/new-org',
+        IfMatch: 'mock-etag-123'
+      });
+    });
+  });
+
+  describe('REMOVE events', () => {
+    it('should delete key from KVS when an item is removed', async () => {
+      const event = {
+        Records: [{
+          eventName: 'REMOVE',
+          dynamodb: {
+            OldImage: {
+              key: { S: 'gh' },
+              value: { S: 'https://github.com' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(describeCallCount, 1);
+      assert.strictEqual(deleteCallCount, 1);
+      assert.deepStrictEqual(lastDeleteInput, {
+        KvsARN: TEST_KVS_ARN,
+        Key: 'gh',
+        IfMatch: 'mock-etag-123'
+      });
+    });
+  });
+
+  describe('Multiple records', () => {
+    it('should process multiple records in a single event', async () => {
+      const event = {
+        Records: [
+          {
+            eventName: 'INSERT',
+            dynamodb: {
+              NewImage: {
+                key: { S: 'gh' },
+                value: { S: 'https://github.com' }
+              }
+            }
+          },
+          {
+            eventName: 'INSERT',
+            dynamodb: {
+              NewImage: {
+                key: { S: 'aws' },
+                value: { S: 'https://console.aws.amazon.com' }
+              }
+            }
+          },
+          {
+            eventName: 'REMOVE',
+            dynamodb: {
+              OldImage: {
+                key: { S: 'old' },
+                value: { S: 'https://old.example.com' }
+              }
+            }
+          }
+        ]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(putCallCount, 2);
+      assert.strictEqual(deleteCallCount, 1);
+      assert.strictEqual(describeCallCount, 3);
+    });
+  });
+
+  describe('ETag handling', () => {
+    it('should fetch ETag before each KVS operation', async () => {
+      const event = {
+        Records: [{
+          eventName: 'INSERT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'test' },
+              value: { S: 'https://test.com' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(describeCallCount, 1);
+      assert.deepStrictEqual(lastDescribeInput, { KvsARN: TEST_KVS_ARN });
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should throw when KVS put fails', async () => {
+      mockPutError = new Error('KVS put failed');
+      const event = {
+        Records: [{
+          eventName: 'INSERT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'test' },
+              value: { S: 'https://test.com' }
+            }
+          }
+        }]
+      };
+
+      await assert.rejects(() => handler(event), { message: 'KVS put failed' });
+    });
+
+    it('should throw when KVS delete fails', async () => {
+      mockDeleteError = new Error('KVS delete failed');
+      const event = {
+        Records: [{
+          eventName: 'REMOVE',
+          dynamodb: {
+            OldImage: {
+              key: { S: 'test' },
+              value: { S: 'https://test.com' }
+            }
+          }
+        }]
+      };
+
+      await assert.rejects(() => handler(event), { message: 'KVS delete failed' });
+    });
+
+    it('should throw when describe KVS fails', async () => {
+      mockDescribeError = new Error('Describe failed');
+      const event = {
+        Records: [{
+          eventName: 'INSERT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'test' },
+              value: { S: 'https://test.com' }
+            }
+          }
+        }]
+      };
+
+      await assert.rejects(() => handler(event), { message: 'Describe failed' });
+    });
+  });
+
+  describe('Unknown event types', () => {
+    it('should skip unknown event types without error', async () => {
+      const event = {
+        Records: [{
+          eventName: 'UNKNOWN_EVENT',
+          dynamodb: {
+            NewImage: {
+              key: { S: 'test' },
+              value: { S: 'https://test.com' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(putCallCount, 0);
+      assert.strictEqual(deleteCallCount, 0);
+      assert.strictEqual(describeCallCount, 0);
+    });
+  });
+});

@@ -399,6 +399,8 @@ Resources:
       KeySchema:
         - AttributeName: key
           KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
 
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
@@ -717,6 +719,108 @@ Resources:
       RestApiId: !Ref ApiGateway
       DeploymentId: !Ref ApiDeployment
       StageName: !Ref Environment
+
+  KvsSyncRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Environment}-${AWS::StackName}-kvs-sync-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBStreamsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:DescribeStream
+                  - dynamodb:ListStreams
+                Resource: !Sub "${LinksTable.Arn}/stream/*"
+        - PolicyName: CloudFrontKVSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudfront-keyvaluestore:DescribeKeyValueStore
+                  - cloudfront-keyvaluestore:GetKey
+                  - cloudfront-keyvaluestore:PutKey
+                  - cloudfront-keyvaluestore:DeleteKey
+                Resource: !GetAtt RedirectKVS.Arn
+
+  KvsSyncFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-${AWS::StackName}-kvs-sync"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt KvsSyncRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          KVS_ARN: !GetAtt RedirectKVS.Arn
+      Code:
+        ZipFile: |
+          const { CloudFrontKeyValueStoreClient, DescribeKeyValueStoreCommand, PutKeyCommand, DeleteKeyCommand } = require('@aws-sdk/client-cloudfront-keyvaluestore');
+          const client = new CloudFrontKeyValueStoreClient();
+
+          async function getETag(kvsArn) {
+            const resp = await client.send(new DescribeKeyValueStoreCommand({ KvsARN: kvsArn }));
+            return resp.ETag;
+          }
+
+          exports.handler = async (event) => {
+            const kvsArn = process.env.KVS_ARN;
+            for (const record of event.Records) {
+              const eventName = record.eventName;
+              try {
+                if (eventName === 'INSERT' || eventName === 'MODIFY') {
+                  const newImage = record.dynamodb.NewImage;
+                  const key = newImage.key.S;
+                  const value = newImage.value.S;
+                  const etag = await getETag(kvsArn);
+                  await client.send(new PutKeyCommand({
+                    KvsARN: kvsArn,
+                    Key: key,
+                    Value: value,
+                    IfMatch: etag
+                  }));
+                  console.log(`KVS put: ${key} -> ${value}`);
+                } else if (eventName === 'REMOVE') {
+                  const oldImage = record.dynamodb.OldImage;
+                  const key = oldImage.key.S;
+                  const etag = await getETag(kvsArn);
+                  await client.send(new DeleteKeyCommand({
+                    KvsARN: kvsArn,
+                    Key: key,
+                    IfMatch: etag
+                  }));
+                  console.log(`KVS delete: ${key}`);
+                }
+              } catch (err) {
+                console.error(`Error processing ${eventName} for record:`, JSON.stringify(record), err);
+                throw err;
+              }
+            }
+          };
+
+  KvsSyncEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt LinksTable.StreamArn
+      FunctionName: !GetAtt KvsSyncFunction.Arn
+      StartingPosition: TRIM_HORIZON
+      BatchSize: 10
+      MaximumRetryAttempts: 3
 
 Outputs:
   WebACLArn:

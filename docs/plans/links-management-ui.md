@@ -77,13 +77,13 @@
 - [x] Run all tests — must pass before next task
 
 ### Task 4: Add KVS sync Lambda
-- [ ] Enable DynamoDB Streams on `LinksTable` (NEW_AND_OLD_IMAGES)
-- [ ] Add `KvsSyncRole` IAM role with DynamoDB Streams read + CloudFront KVS write permissions
-- [ ] Add `KvsSyncFunction` Lambda triggered by DynamoDB Stream — handles INSERT/MODIFY (put key in KVS) and REMOVE (delete key from KVS)
-- [ ] Add `EventSourceMapping` to wire DynamoDB Stream to Lambda
-- [ ] Validate template
-- [ ] Write tests for KVS sync Lambda logic (insert, update, delete events)
-- [ ] Run all tests — must pass before next task
+- [x] Enable DynamoDB Streams on `LinksTable` (NEW_AND_OLD_IMAGES)
+- [x] Add `KvsSyncRole` IAM role with DynamoDB Streams read + CloudFront KVS write permissions
+- [x] Add `KvsSyncFunction` Lambda triggered by DynamoDB Stream — handles INSERT/MODIFY (put key in KVS) and REMOVE (delete key from KVS)
+- [x] Add `EventSourceMapping` to wire DynamoDB Stream to Lambda
+- [x] Validate template
+- [x] Write tests for KVS sync Lambda logic (insert, update, delete events)
+- [x] Run all tests — must pass before next task
 
 ### Task 5: Scaffold React UI project
 - [ ] Clean out existing `ui/` directory (remove stale dist/, node_modules/, keep nothing)
