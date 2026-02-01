@@ -41,6 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signIn = useCallback(async (email: string, password: string) => {
+    try {
+      await amplifySignOut();
+    } catch {
+      // Ignore errors from signOut - there may be no active session
+    }
     const { isSignedIn, nextStep } = await amplifySignIn({ username: email, password });
     if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
       setNeedsNewPassword(true);
