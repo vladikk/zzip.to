@@ -30,7 +30,7 @@ export default function LinksPage() {
 
   async function handleCreate(key: string, value: string) {
     await createLink(key, value);
-    fetchLinks();
+    await fetchLinks();
   }
 
   async function handleDelete() {
@@ -41,7 +41,6 @@ export default function LinksPage() {
       await fetchLinks();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete link');
-      setDeleteTarget(null);
     }
   }
 
