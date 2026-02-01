@@ -80,6 +80,16 @@ describe('api', () => {
 
       await expect(createLink('gh', 'https://github.com')).rejects.toThrow('Key already exists');
     });
+
+    it('extracts error message from JSON response body', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: () => Promise.resolve(JSON.stringify({ error: 'Invalid key format' })),
+      });
+
+      await expect(createLink('gh', 'https://github.com')).rejects.toThrow('Invalid key format');
+    });
   });
 
   describe('deleteLink', () => {

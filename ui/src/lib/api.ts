@@ -43,7 +43,14 @@ export async function createLink(key: string, value: string): Promise<void> {
   });
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Failed to create link: ${response.status}`);
+    let message = `Failed to create link: ${response.status}`;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed.error) message = parsed.error;
+    } catch {
+      if (body) message = body;
+    }
+    throw new Error(message);
   }
 }
 
