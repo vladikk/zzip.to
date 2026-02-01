@@ -12,5 +12,13 @@ config/*.local.sh
 # UI build output
 ui/dist/
 
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# TypeScript build info
+*.tsbuildinfo
+
 # ralphex progress logs
 progress*.txt
