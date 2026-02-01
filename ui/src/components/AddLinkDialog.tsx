@@ -3,7 +3,7 @@ import { z } from 'zod/v4';
 import styles from './AddLinkDialog.module.css';
 
 const linkKeySchema = z.string().min(1, 'Key is required').regex(/^[a-zA-Z0-9_-]+$/, 'Key must be alphanumeric with hyphens and underscores only');
-const linkValueSchema = z.string().min(1, 'Target URL is required').url('Must be a valid URL');
+const linkValueSchema = z.string().min(1, 'Target URL is required').regex(/^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.\-]+(:\d+)?(\/.*)?$/, 'Must be a valid HTTP/HTTPS URL');
 
 interface AddLinkDialogProps {
   open: boolean;

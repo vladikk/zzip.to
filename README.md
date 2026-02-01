@@ -386,7 +386,6 @@ The admin UI is a React SPA for managing redirect links through a web interface 
    ```
    VITE_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
    VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
-   VITE_COGNITO_REGION=us-east-1
    VITE_API_ENDPOINT=https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/prod
    ```
 

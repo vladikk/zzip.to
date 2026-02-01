@@ -517,6 +517,7 @@ Resources:
       Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
       Environment:
         Variables:
           TABLE_NAME: !Ref LinksTable
@@ -596,7 +597,7 @@ Resources:
               if (!value || typeof value !== 'string') {
                 return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing or invalid value field' }) };
               }
-              const urlPattern = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.\-]+(\/.*)?$/;
+              const urlPattern = /^https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.\-]+(:\d+)?(\/.*)?$/;
               const isWildcard = value.endsWith('/*');
               const urlToValidate = isWildcard ? value.slice(0, -2) : value;
               if (!urlPattern.test(urlToValidate)) {
@@ -814,13 +815,22 @@ Resources:
                 } else if (eventName === 'REMOVE') {
                   const oldImage = record.dynamodb.OldImage;
                   const key = oldImage.key.S;
-                  const result = await client.send(new DeleteKeyCommand({
-                    KvsARN: kvsArn,
-                    Key: key,
-                    IfMatch: currentEtag
-                  }));
-                  currentEtag = result.ETag;
-                  console.log(`KVS delete: ${key}`);
+                  try {
+                    const result = await client.send(new DeleteKeyCommand({
+                      KvsARN: kvsArn,
+                      Key: key,
+                      IfMatch: currentEtag
+                    }));
+                    currentEtag = result.ETag;
+                    console.log(`KVS delete: ${key}`);
+                  } catch (deleteErr) {
+                    if (deleteErr.name === 'ResourceNotFoundException') {
+                      console.log(`KVS key already deleted: ${key}`);
+                      currentEtag = await getETag(kvsArn);
+                    } else {
+                      throw deleteErr;
+                    }
+                  }
                 }
               } catch (err) {
                 console.error(`Error processing ${eventName} for record:`, JSON.stringify(record), err);
