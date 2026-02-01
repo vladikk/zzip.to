@@ -8,6 +8,7 @@ set -euo pipefail
 
 TABLE_NAME=${1:-}
 DATA_FILE=${2:-data/redirects.json}
+REGION=${REGION:-us-east-1}
 
 if [[ -z "$TABLE_NAME" ]]; then
   echo "Usage: ./scripts/seed-dynamodb.sh <table-name> [data-file]"
@@ -48,7 +49,7 @@ flush_batch() {
 
   local response
   response=$(aws dynamodb batch-write-item \
-    --region us-east-1 \
+    --region "$REGION" \
     --request-items "$request_json" \
     --output json)
 
@@ -63,7 +64,7 @@ flush_batch() {
     echo "  WARNING: $unprocessed items unprocessed. Retry $retry_count/$max_retries (backoff ${sleep_time}s)..."
     sleep "$sleep_time"
     response=$(aws dynamodb batch-write-item \
-      --region us-east-1 \
+      --region "$REGION" \
       --request-items "$(echo "$response" | jq '.UnprocessedItems')" \
       --output json)
     unprocessed=$(echo "$response" | jq -r ".UnprocessedItems.\"$TABLE_NAME\" // [] | length")
