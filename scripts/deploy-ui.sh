@@ -15,35 +15,21 @@ FULL_STACK_NAME="$STACK_NAME-$ENVIRONMENT"
 
 echo "Fetching stack outputs for $FULL_STACK_NAME..."
 
-ADMIN_BUCKET=$(aws cloudformation describe-stacks \
+STACK_OUTPUTS=$(aws cloudformation describe-stacks \
   --stack-name "$FULL_STACK_NAME" \
   --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='AdminBucketName'].OutputValue" \
-  --output text)
+  --query "Stacks[0].Outputs" \
+  --output json)
 
-ADMIN_DISTRIBUTION_ID=$(aws cloudformation describe-stacks \
-  --stack-name "$FULL_STACK_NAME" \
-  --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='AdminDistributionId'].OutputValue" \
-  --output text)
+get_output() {
+  echo "$STACK_OUTPUTS" | grep -A1 "\"$1\"" | grep OutputValue | sed 's/.*"OutputValue": "//;s/".*//'
+}
 
-USER_POOL_ID=$(aws cloudformation describe-stacks \
-  --stack-name "$FULL_STACK_NAME" \
-  --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" \
-  --output text)
-
-USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
-  --stack-name "$FULL_STACK_NAME" \
-  --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" \
-  --output text)
-
-API_ENDPOINT=$(aws cloudformation describe-stacks \
-  --stack-name "$FULL_STACK_NAME" \
-  --region "$REGION" \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
-  --output text)
+ADMIN_BUCKET=$(get_output AdminBucketName)
+ADMIN_DISTRIBUTION_ID=$(get_output AdminDistributionId)
+USER_POOL_ID=$(get_output UserPoolId)
+USER_POOL_CLIENT_ID=$(get_output UserPoolClientId)
+API_ENDPOINT=$(get_output ApiEndpoint)
 
 if [[ -z "$ADMIN_BUCKET" || -z "$ADMIN_DISTRIBUTION_ID" ]]; then
   echo "Error: Could not fetch AdminBucketName or AdminDistributionId from stack outputs."

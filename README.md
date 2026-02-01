@@ -216,7 +216,9 @@ This runs React component and integration tests covering:
 ```bash
 # Validate bash syntax
 bash -n scripts/deploy.sh
+bash -n scripts/deploy-ui.sh
 bash -n scripts/populate-kvs.sh
+bash -n scripts/seed-dynamodb.sh
 bash -n scripts/destroy.sh
 
 # Validate CloudFormation template
@@ -229,38 +231,9 @@ aws cloudformation validate-template \
 
 ### Update Redirect Mappings
 
-#### Option A: Using GitHub Actions (Recommended)
+#### Option A: Admin UI (Recommended)
 
-The repository includes a GitHub Actions workflow that automatically updates the KeyValueStore when you commit changes to `data/redirects.json`.
-
-**Setup:**
-
-1. Go to your GitHub repository Settings → Secrets and variables → Actions
-
-2. Add the following **Secrets**:
-   - `AWS_ACCESS_KEY_ID`: Your AWS access key
-   - `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
-
-3. Add the following **Variables**:
-   - `KVS_ARN`: Your KeyValueStore ARN (from deployment outputs)
-
-**Usage:**
-
-Simply edit `data/redirects.json` and commit to the `main` branch:
-
-```bash
-# Edit redirects
-vim data/redirects.json
-
-# Commit and push
-git add data/redirects.json
-git commit -m "Update redirects"
-git push origin main
-```
-
-The workflow will automatically populate the KVS with your changes.
-
-You can also manually trigger the workflow from the Actions tab with a custom data file path.
+Redirects are managed through the admin UI at `https://admin.zzip.to`. Log in with a whitelisted Cognito user to add, update, or delete redirect links. Changes are automatically synced to CloudFront KeyValueStore via DynamoDB Streams.
 
 #### Option B: Manual Update via CLI
 
@@ -278,6 +251,8 @@ aws cloudfront-keyvaluestore put-key \
 # Or bulk update from JSON file
 ./scripts/populate-kvs.sh "$KVS_ARN" data/redirects.json
 ```
+
+> **Note:** The legacy workflow of editing `data/redirects.json` and using GitHub Actions to sync to KVS is superseded by the admin UI. The GitHub Actions workflow and `populate-kvs.sh` script remain available as a fallback.
 
 ### Update Function Code
 

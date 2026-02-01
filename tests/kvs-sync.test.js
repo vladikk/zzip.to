@@ -104,12 +104,28 @@ function createKvsSyncHandler(kvsArn) {
         } else if (eventName === 'REMOVE') {
           const oldImage = record.dynamodb.OldImage;
           const key = oldImage.key.S;
-          const result = await mockSend(new DeleteKeyCommand({
-            KvsARN: kvsArn,
-            Key: key,
-            IfMatch: currentEtag
-          }));
-          currentEtag = result.ETag;
+          try {
+            const result = await mockSend(new DeleteKeyCommand({
+              KvsARN: kvsArn,
+              Key: key,
+              IfMatch: currentEtag
+            }));
+            currentEtag = result.ETag;
+          } catch (deleteErr) {
+            if (deleteErr.name === 'ResourceNotFoundException') {
+              currentEtag = await getETag();
+            } else if (deleteErr.name === 'ConflictException') {
+              currentEtag = await getETag();
+              const result = await mockSend(new DeleteKeyCommand({
+                KvsARN: kvsArn,
+                Key: key,
+                IfMatch: currentEtag
+              }));
+              currentEtag = result.ETag;
+            } else {
+              throw deleteErr;
+            }
+          }
         }
       } catch (err) {
         console.error(`Error processing ${eventName} for record:`, JSON.stringify(record), err);
@@ -229,6 +245,100 @@ describe('KVS Sync Lambda', () => {
         IfMatch: 'mock-etag-123'
       });
     });
+
+    it('should handle ResourceNotFoundException gracefully on delete', async () => {
+      const notFoundErr = new Error('ResourceNotFoundException');
+      notFoundErr.name = 'ResourceNotFoundException';
+      mockDeleteError = notFoundErr;
+
+      const event = {
+        Records: [{
+          eventName: 'REMOVE',
+          dynamodb: {
+            OldImage: {
+              key: { S: 'already-deleted' },
+              value: { S: 'https://example.com' }
+            }
+          }
+        }]
+      };
+
+      await handler(event);
+
+      assert.strictEqual(deleteCallCount, 1);
+      // Should have called describe twice: once initial, once to refresh after ResourceNotFoundException
+      assert.strictEqual(describeCallCount, 2);
+    });
+
+    it('should retry with fresh ETag on ConflictException for DELETE', async () => {
+      let customDeleteCount = 0;
+      let customDescribeCount = 0;
+      const customHandler = async (event) => {
+        function send(command) {
+          if (command._type === 'DescribeKeyValueStore') {
+            customDescribeCount++;
+            return { ETag: customDescribeCount === 1 ? 'stale-etag' : 'fresh-etag' };
+          }
+          if (command._type === 'DeleteKey') {
+            customDeleteCount++;
+            if (customDeleteCount === 1) {
+              const err = new Error('ConflictException');
+              err.name = 'ConflictException';
+              throw err;
+            }
+            return { ETag: 'after-delete-etag' };
+          }
+          throw new Error(`Unknown command: ${command._type}`);
+        }
+
+        async function getETag() {
+          const resp = await send(new DescribeKeyValueStoreCommand({ KvsARN: TEST_KVS_ARN }));
+          return resp.ETag;
+        }
+
+        let currentEtag = await getETag();
+        for (const record of event.Records) {
+          const eventName = record.eventName;
+          if (eventName === 'REMOVE') {
+            const oldImage = record.dynamodb.OldImage;
+            const key = oldImage.key.S;
+            try {
+              const result = await send(new DeleteKeyCommand({
+                KvsARN: TEST_KVS_ARN, Key: key, IfMatch: currentEtag
+              }));
+              currentEtag = result.ETag;
+            } catch (deleteErr) {
+              if (deleteErr.name === 'ConflictException') {
+                currentEtag = await getETag();
+                const result = await send(new DeleteKeyCommand({
+                  KvsARN: TEST_KVS_ARN, Key: key, IfMatch: currentEtag
+                }));
+                currentEtag = result.ETag;
+              } else {
+                throw deleteErr;
+              }
+            }
+          }
+        }
+      };
+
+      const event = {
+        Records: [{
+          eventName: 'REMOVE',
+          dynamodb: {
+            OldImage: {
+              key: { S: 'conflict-delete-test' },
+              value: { S: 'https://example.com' }
+            }
+          }
+        }]
+      };
+
+      await customHandler(event);
+
+      assert.strictEqual(customDescribeCount, 2, 'should describe twice (initial + retry)');
+      assert.strictEqual(customDeleteCount, 2, 'should delete twice (fail + retry)');
+    });
   });
 
   describe('Multiple records', () => {
@@ -294,48 +404,6 @@ describe('KVS Sync Lambda', () => {
     });
 
     it('should retry with fresh ETag on ConflictException for PUT', async () => {
-      // Make the first put throw ConflictException, then clear the error so retry succeeds
-      const conflictErr = new Error('ConflictException');
-      conflictErr.name = 'ConflictException';
-      mockPutError = conflictErr;
-
-      // After first put fails, the handler will call getETag again, then retry put
-      // We need to clear mockPutError after first attempt
-      const origSend = mockSend;
-      let localPutCalls = 0;
-      const patchedHandler = createKvsSyncHandler(TEST_KVS_ARN);
-
-      // Patch: clear mockPutError after first put attempt so retry succeeds
-      // We do this by overriding the test mock's behavior via putCallCount
-      const origMockSend = mockSend;
-
-      // Recreate handler with a send that fails on first put only
-      resetMocks();
-      mockETag = 'initial-etag';
-      let putAttempts = 0;
-
-      // We'll intercept at the mock level
-      const savedPutError = null;
-
-      // Simple approach: use the existing handler but modify mockPutError mid-flight
-      // The handler calls mockSend which checks mockPutError synchronously
-      // After first put throws, handler catches ConflictException, calls describe, then retries put
-      // We set mockPutError = conflictErr initially
-      // In the describe mock (second call), we clear mockPutError
-
-      let descCalls = 0;
-      const origDescCount = describeCallCount;
-
-      // Override: on second describe call, clear the put error
-      mockPutError = conflictErr;
-
-      // Monkey-patch by making mockETag change on second describe
-      // Actually simpler: just track via describeCallCount
-      // The mockSend checks mockPutError, so we need to clear it between first and second put
-      // The sequence is: describe -> put (fail) -> describe -> put (succeed)
-      // We can use a Proxy or just accept the test design needs a custom send.
-
-      // Simplest: inline a custom handler for this test
       let customDescribeCount = 0;
       let customPutCount = 0;
       const customHandler = async (event) => {
