@@ -112,19 +112,19 @@
 - [x] Run tests — must pass before next task
 
 ### Task 7: Build redirect management UI
-- [ ] Create `src/lib/api.ts` — API client with auth token injection: `listLinks()`, `createLink(key, value)`, `deleteLink(key)`
-- [ ] Create `src/components/LinksPage.tsx` — main page with links table and add/delete actions
-- [ ] Create `src/components/LinksPage.module.css` — table and page layout styles
-- [ ] Create `src/components/AddLinkDialog.tsx` — Radix Dialog with form fields for key and target URL, Zod validation (key: alphanumeric + hyphens, value: valid URL)
-- [ ] Create `src/components/AddLinkDialog.module.css` — dialog styles
-- [ ] Create `src/components/DeleteConfirmDialog.tsx` — Radix AlertDialog for delete confirmation
-- [ ] Create `src/components/Layout.tsx` — app shell with header (showing user email, sign-out button) and main content area
-- [ ] Create `src/components/Layout.module.css` — layout styles
-- [ ] Wire routes in `App.tsx`: `/` → LinksPage (protected), `/login` → LoginPage
-- [ ] Write tests for api.ts (mock fetch, verify auth header, test error handling)
-- [ ] Write tests for LinksPage (renders table, add/delete flows)
-- [ ] Write tests for AddLinkDialog (validation, submission)
-- [ ] Run tests — must pass before next task
+- [x] Create `src/lib/api.ts` — API client with auth token injection: `listLinks()`, `createLink(key, value)`, `deleteLink(key)`
+- [x] Create `src/components/LinksPage.tsx` — main page with links table and add/delete actions
+- [x] Create `src/components/LinksPage.module.css` — table and page layout styles
+- [x] Create `src/components/AddLinkDialog.tsx` — Radix Dialog with form fields for key and target URL, Zod validation (key: alphanumeric + hyphens, value: valid URL)
+- [x] Create `src/components/AddLinkDialog.module.css` — dialog styles
+- [x] Create `src/components/DeleteConfirmDialog.tsx` — Radix AlertDialog for delete confirmation
+- [x] Create `src/components/Layout.tsx` — app shell with header (showing user email, sign-out button) and main content area
+- [x] Create `src/components/Layout.module.css` — layout styles
+- [x] Wire routes in `App.tsx`: `/` → LinksPage (protected), `/login` → LoginPage
+- [x] Write tests for api.ts (mock fetch, verify auth header, test error handling)
+- [x] Write tests for LinksPage (renders table, add/delete flows)
+- [x] Write tests for AddLinkDialog (validation, submission)
+- [x] Run tests — must pass before next task
 
 ### Task 8: Add UI hosting to CloudFormation
 - [ ] Add `AdminBucket` S3 bucket for UI static files (block public access)

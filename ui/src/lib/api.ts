@@ -1,0 +1,55 @@
+import { fetchAuthSession } from 'aws-amplify/auth';
+
+function getApiEndpoint(): string {
+  return import.meta.env.VITE_API_ENDPOINT;
+}
+
+export interface Link {
+  key: string;
+  value: string;
+}
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const session = await fetchAuthSession();
+  const token = session.tokens?.idToken?.toString();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+  return {
+    Authorization: token,
+    'Content-Type': 'application/json',
+  };
+}
+
+export async function listLinks(): Promise<Link[]> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${getApiEndpoint()}/links`, { headers });
+  if (!response.ok) {
+    throw new Error(`Failed to list links: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createLink(key: string, value: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${getApiEndpoint()}/links/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ value }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Failed to create link: ${response.status}`);
+  }
+}
+
+export async function deleteLink(key: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${getApiEndpoint()}/links/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete link: ${response.status}`);
+  }
+}
