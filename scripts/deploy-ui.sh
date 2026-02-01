@@ -22,7 +22,7 @@ STACK_OUTPUTS=$(aws cloudformation describe-stacks \
   --output json)
 
 get_output() {
-  echo "$STACK_OUTPUTS" | grep -A1 "\"$1\"" | grep OutputValue | sed 's/.*"OutputValue": "//;s/".*//'
+  echo "$STACK_OUTPUTS" | jq -r ".[] | select(.OutputKey==\"$1\") | .OutputValue"
 }
 
 ADMIN_BUCKET=$(get_output AdminBucketName)
