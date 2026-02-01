@@ -47,7 +47,7 @@ describe('AddLinkDialog', () => {
     await user.type(screen.getByLabelText('Target URL'), 'not-a-url');
     await user.click(screen.getByRole('button', { name: 'Add Link' }));
 
-    expect(screen.getByText('Must be a valid URL')).toBeInTheDocument();
+    expect(screen.getByText('Must be a valid HTTP/HTTPS URL')).toBeInTheDocument();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
 

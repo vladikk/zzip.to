@@ -10,7 +10,7 @@ ENVIRONMENT="dev"
 STACK_NAME="zziptodev"
 
 # ACM Certificate ARN (must be in us-east-1)
-CERTIFICATE_ARN="arn:aws:acm:us-east-1:594884061901:certificate/YOUR_CERT_ID"
+CERTIFICATE_ARN="arn:aws:acm:us-east-1:123456789012:certificate/YOUR_CERT_ID"
 
 # Route 53 Hosted Zone ID
 HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
