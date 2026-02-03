@@ -65,3 +65,43 @@ This file contains critical constraints and non-obvious information discovered d
 [SECRETS] GitHub Actions requires AWS credentials as repository secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) and KVS_ARN as a repository variable.
 
 [CONFIG] `config/deploy-params.local.sh` contains deployment parameters and is gitignored - never commit this file as it may contain ARNs and account IDs.
+
+## Admin UI - Cognito Authentication
+
+[AUTH] Cognito User Pool uses `ALLOW_USER_SRP_AUTH` and `ALLOW_REFRESH_TOKEN_AUTH` flows only - no client secret is generated. Self-signup is disabled; users must be created by an admin via AWS CLI.
+
+[AUTH] Pre-authentication Lambda trigger checks the user's email against the `AllowedEmails` CloudFormation parameter (comma-separated list). Non-whitelisted emails are rejected before authentication completes.
+
+[AUTH] The admin UI uses AWS Amplify (Gen 2 API) for Cognito integration - `signIn`, `signOut`, `getCurrentUser`, and `fetchAuthSession` from `aws-amplify/auth`.
+
+## Admin UI - API Gateway and CORS
+
+[CORS] API Gateway has both mock OPTIONS methods for CORS preflight and `Access-Control-Allow-*` headers in all Lambda responses. The allowed origin is set to `https://${AdminDomainName}` (defaults to `https://admin.zzip.to`).
+
+[API] API Gateway uses a Cognito Authorizer - the frontend must include the JWT ID token in the `Authorization` header for all API calls.
+
+[API] Lambda handlers use proxy integration (`AWS_PROXY`) - the Lambda is responsible for returning the full HTTP response including status code, headers, and body.
+
+## Admin UI - DynamoDB and KVS Sync
+
+[DYNAMO] `LinksTable` uses PAY_PER_REQUEST billing and a simple hash key (`key` of type String). DynamoDB Streams are enabled with `NEW_AND_OLD_IMAGES` stream view type.
+
+[KVS-SYNC] The KVS sync Lambda processes DynamoDB Stream events: INSERT and MODIFY events call `PutKey` on CloudFront KVS, REMOVE events call `DeleteKey`. The Lambda handles ETag-based optimistic concurrency by fetching the current ETag before each write.
+
+[KVS-SYNC] The sync Lambda requires both `dynamodb:GetRecords`/`dynamodb:GetShardIterator`/`dynamodb:DescribeStream`/`dynamodb:ListStreams` permissions and `cloudfront-keyvaluestore:PutKey`/`DeleteKey`/`DescribeKeyValueStore` permissions.
+
+## Admin UI - Frontend
+
+[UI] The React UI is built with Vite + React 19 + TypeScript + Radix UI primitives + CSS modules. It is hosted on a separate CloudFront distribution (`admin.zzip.to`) backed by an S3 bucket.
+
+[UI] Environment variables are injected at build time via Vite's `import.meta.env` - the `.env` file must be configured before building.
+
+[UI] The admin CloudFront distribution uses a custom error response mapping 403 to `/index.html` with 200 status code, enabling SPA client-side routing.
+
+[DEPLOY] `scripts/deploy-ui.sh` builds the UI, syncs to S3, and creates a CloudFront invalidation for `/*`. It reads the S3 bucket name and distribution ID from CloudFormation stack outputs.
+
+[SEED] `scripts/seed-dynamodb.sh` is a one-time migration script that reads `data/redirects.json` and batch-writes items to DynamoDB. After migration, redirects are managed exclusively through the admin UI.
+
+[DYNAMO] `LinksTable` has `DeletionPolicy: Retain` and `UpdateReplacePolicy: Retain` - the table survives stack deletion and must be manually deleted if cleanup is desired.
+
+[DEPLOY] CloudFormation deployment requires `CAPABILITY_NAMED_IAM` (not just `CAPABILITY_IAM`) because IAM roles use explicit `RoleName` properties with `!Sub` expressions.
