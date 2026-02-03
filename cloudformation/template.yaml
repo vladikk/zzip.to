@@ -38,20 +38,8 @@ Resources:
       DefaultAction:
         Allow: {}
       Rules:
-        - Name: !Sub "${Environment}-${AWS::StackName}-common-rules"
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: !Sub "${Environment}-${AWS::StackName}-common-rules"
         - Name: !Sub "${Environment}-${AWS::StackName}-rate-limit"
-          Priority: 2
+          Priority: 1
           Action:
             Block: {}
           Statement:
