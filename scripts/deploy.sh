@@ -13,7 +13,6 @@ STACK_NAME=${2:-${STACK_NAME:-zzip-to}}
 CERTIFICATE_ARN=${3:-${CERTIFICATE_ARN:-}}
 HOSTED_ZONE_ID=${4:-${HOSTED_ZONE_ID:-}}
 DOMAIN_NAME=${5:-${DOMAIN_NAME:-zzip.to}}
-RATE_LIMIT_THRESHOLD=${RATE_LIMIT_THRESHOLD:-1000}
 ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
 ADMIN_DOMAIN_NAME=${ADMIN_DOMAIN_NAME:-admin.zzip.to}
 REGION=${REGION:-us-east-1}
@@ -58,7 +57,6 @@ aws cloudformation deploy \
     CertificateArn="$CERTIFICATE_ARN" \
     HostedZoneId="$HOSTED_ZONE_ID" \
     DomainName="$DOMAIN_NAME" \
-    RateLimitThreshold="$RATE_LIMIT_THRESHOLD" \
     AllowedEmails="$ALLOWED_EMAILS" \
     AdminDomainName="$ADMIN_DOMAIN_NAME" \
     KvsSyncCodeS3Bucket="$LAMBDA_BUCKET" \

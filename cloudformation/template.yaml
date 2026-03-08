@@ -16,11 +16,6 @@ Parameters:
     Default: zzip.to
     Description: Domain name for the service
 
-  RateLimitThreshold:
-    Type: Number
-    Default: 1000
-    Description: Maximum number of requests per 5-minute window per IP address
-
   CertificateArn:
     Type: String
     Description: ARN of ACM certificate for the domain (must be in us-east-1)
@@ -47,31 +42,6 @@ Parameters:
     Description: S3 key for the KVS sync Lambda code package
 
 Resources:
-  WebACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub "${Environment}-${AWS::StackName}-webacl"
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Allow: {}
-      Rules:
-        - Name: !Sub "${Environment}-${AWS::StackName}-rate-limit"
-          Priority: 1
-          Action:
-            Block: {}
-          Statement:
-            RateBasedStatement:
-              Limit: !Ref RateLimitThreshold
-              AggregateKeyType: IP
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: !Sub "${Environment}-${AWS::StackName}-rate-limit"
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub "${Environment}-${AWS::StackName}-webacl"
-
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -264,7 +234,6 @@ Resources:
           AcmCertificateArn: !Ref CertificateArn
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
-        WebACLId: !GetAtt WebACL.Arn
         DefaultCacheBehavior:
           TargetOriginId: dummy-origin
           ViewerProtocolPolicy: redirect-to-https
@@ -914,17 +883,6 @@ Resources:
         HostedZoneId: Z2FDTNDATAQYW2
 
 Outputs:
-  WebACLArn:
-    Description: ARN of the WAF WebACL
-    Value: !GetAtt WebACL.Arn
-    Export:
-      Name: !Sub "${Environment}-${AWS::StackName}-webacl-arn"
-
-  WebACLId:
-    Description: ID of the WAF WebACL
-    Value: !GetAtt WebACL.Id
-    Export:
-      Name: !Sub "${Environment}-${AWS::StackName}-webacl-id"
 
   DistributionId:
     Description: ID of the CloudFront Distribution

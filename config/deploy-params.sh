@@ -18,9 +18,6 @@ HOSTED_ZONE_ID="YOUR_HOSTED_ZONE_ID"
 # Domain name
 DOMAIN_NAME="zzip.to"
 
-# Rate limit threshold (requests per 5-minute window)
-RATE_LIMIT_THRESHOLD="1000"
-
 # Comma-separated list of email addresses allowed admin access (required)
 ALLOWED_EMAILS="admin@example.com"
 
