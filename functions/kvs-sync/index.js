@@ -1,3 +1,4 @@
+require('@aws-sdk/signature-v4a');
 const { CloudFrontKeyValueStoreClient, DescribeKeyValueStoreCommand, PutKeyCommand, DeleteKeyCommand } = require('@aws-sdk/client-cloudfront-keyvaluestore');
 const client = new CloudFrontKeyValueStoreClient();
 
