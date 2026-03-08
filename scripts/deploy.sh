@@ -32,6 +32,21 @@ if [[ -z "$CERTIFICATE_ARN" || -z "$HOSTED_ZONE_ID" || -z "$ALLOWED_EMAILS" ]]; 
   exit 1
 fi
 
+echo "Packaging KVS sync Lambda..."
+LAMBDA_BUCKET="${ENVIRONMENT}-${STACK_NAME}-lambda-code-$(aws sts get-caller-identity --query Account --output text)"
+KVS_SYNC_KEY="kvs-sync/kvs-sync-$(date +%s).zip"
+
+# Create the bucket if it doesn't exist
+aws s3api head-bucket --bucket "$LAMBDA_BUCKET" --region "$REGION" 2>/dev/null || \
+  aws s3api create-bucket --bucket "$LAMBDA_BUCKET" --region "$REGION" 2>/dev/null
+
+# Install dependencies and create zip
+(cd functions/kvs-sync && npm install --production --quiet && zip -qr /tmp/kvs-sync.zip .)
+
+# Upload to S3
+aws s3 cp /tmp/kvs-sync.zip "s3://${LAMBDA_BUCKET}/${KVS_SYNC_KEY}" --region "$REGION"
+rm -f /tmp/kvs-sync.zip
+
 echo "Deploying $STACK_NAME ($ENVIRONMENT) to $REGION..."
 
 aws cloudformation deploy \
@@ -46,6 +61,8 @@ aws cloudformation deploy \
     RateLimitThreshold="$RATE_LIMIT_THRESHOLD" \
     AllowedEmails="$ALLOWED_EMAILS" \
     AdminDomainName="$ADMIN_DOMAIN_NAME" \
+    KvsSyncCodeS3Bucket="$LAMBDA_BUCKET" \
+    KvsSyncCodeS3Key="$KVS_SYNC_KEY" \
   --capabilities CAPABILITY_NAMED_IAM \
   --no-fail-on-empty-changeset
 
