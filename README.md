@@ -254,4 +254,4 @@ Approximate monthly costs (us-east-1, assuming 1M requests):
 
 ## License
 
-Copyright 2024. All rights reserved.
+MIT
