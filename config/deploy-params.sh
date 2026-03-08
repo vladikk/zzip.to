@@ -7,7 +7,7 @@
 ENVIRONMENT="dev"
 
 # Stack name
-STACK_NAME="zziptodev"
+STACK_NAME="zzip-to"
 
 # ACM Certificate ARN (must be in us-east-1)
 CERTIFICATE_ARN="arn:aws:acm:us-east-1:123456789012:certificate/YOUR_CERT_ID"
