@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modularity Review — zzip.to</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --surface: #fff;
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #e0e0e0;
+    --accent: #2563eb;
+    --critical: #dc2626;
+    --significant: #d97706;
+    --minor: #2563eb;
+    --balanced: #16a34a;
+    --unbalanced: #dc2626;
+    --neutral: #6b7280;
+    --code-bg: #f3f4f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111;
+      --surface: #1a1a1a;
+      --text: #e5e5e5;
+      --muted: #999;
+      --border: #333;
+      --accent: #60a5fa;
+      --critical: #f87171;
+      --significant: #fbbf24;
+      --minor: #60a5fa;
+      --balanced: #4ade80;
+      --unbalanced: #f87171;
+      --neutral: #9ca3af;
+      --code-bg: #252525;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { margin-bottom: 2.5rem; }
+  header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .meta { color: var(--muted); font-size: 0.9rem; }
+  .meta span + span::before { content: " \00b7 "; }
+
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 2.5rem 0 1rem; }
+  h3 { font-size: 1.05rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--muted); }
+
+  p, li { margin-bottom: 0.5rem; }
+  ul { padding-left: 1.25rem; }
+
+  code {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .card-header h2 { margin: 0; font-size: 1.15rem; }
+  .card-integration { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .badge-significant { background: color-mix(in srgb, var(--significant) 15%, transparent); color: var(--significant); }
+  .badge-minor { background: color-mix(in srgb, var(--minor) 15%, transparent); color: var(--minor); }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+  }
+  .card-section { margin-top: 1.25rem; }
+
+  .recommendation {
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin-top: 0.5rem;
+  }
+  .tradeoff {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+    font-style: italic;
+  }
+
+  /* Overview table */
+  .table-wrap { overflow-x: auto; margin: 1rem 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  td:last-child { min-width: 120px; }
+  .tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15em 0.5em;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .tag-yes { background: color-mix(in srgb, var(--balanced) 15%, transparent); color: var(--balanced); }
+  .tag-no { background: color-mix(in srgb, var(--unbalanced) 15%, transparent); color: var(--unbalanced); }
+  .tag-note { background: color-mix(in srgb, var(--neutral) 15%, transparent); color: var(--neutral); }
+
+  /* Validation comparison table */
+  .val-table { font-size: 0.8rem; }
+  .val-table th { font-size: 0.7rem; }
+  .val-table td { padding: 0.4rem 0.6rem; }
+
+  /* Summary */
+  .summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+  }
+  .summary h2 { margin-top: 0; }
+
+  /* Print */
+  @media print {
+    body { max-width: 100%; padding: 1rem; }
+    .card, .summary { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Modularity Review</h1>
+  <div class="meta">
+    <span>zzip.to</span>
+    <span>Full codebase</span>
+    <span>2026-03-09</span>
+  </div>
+</header>
+
+<!-- ============ COUPLING OVERVIEW ============ -->
+<h2>Coupling Overview</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Integration</th>
+      <th>Strength</th>
+      <th>Distance</th>
+      <th>Volatility</th>
+      <th>Balanced?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>redirect.js</code> &#8596; <code>template.yaml</code></td>
+      <td>Functional (duplicated code)</td>
+      <td>Low</td>
+      <td>Low</td>
+      <td><span class="tag tag-no">No</span></td>
+    </tr>
+    <tr>
+      <td>UI validation &#8596; CreateLink Lambda</td>
+      <td>Functional (duplicated rules)</td>
+      <td>High</td>
+      <td>Low</td>
+      <td><span class="tag tag-note">Neutralized</span></td>
+    </tr>
+    <tr>
+      <td>Wildcard convention across 3 components</td>
+      <td>Functional (implicit)</td>
+      <td>High</td>
+      <td>Low</td>
+      <td><span class="tag tag-note">Neutralized</span></td>
+    </tr>
+    <tr>
+      <td>KVS Sync &#8594; DynamoDB schema</td>
+      <td>Model</td>
+      <td>Medium</td>
+      <td>Low</td>
+      <td><span class="tag tag-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>CRUD Lambdas &#8594; DynamoDB</td>
+      <td>Model</td>
+      <td>Low</td>
+      <td>Low</td>
+      <td><span class="tag tag-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>UI &#8594; API Gateway (REST)</td>
+      <td>Contract</td>
+      <td>High</td>
+      <td>Low</td>
+      <td><span class="tag tag-yes">Yes</span></td>
+    </tr>
+    <tr>
+      <td>Pre-Auth Lambda &#8596; Cognito</td>
+      <td>Contract</td>
+      <td>Low</td>
+      <td>Low</td>
+      <td><span class="tag tag-yes">Yes</span></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============ ISSUE 1 ============ -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2>Duplicated Redirect Function Code</h2>
+      <div class="card-integration"><code>functions/redirect.js</code> &#8596; <code>cloudformation/template.yaml</code> (lines 79&ndash;204)</div>
+    </div>
+    <span class="badge badge-significant">Significant</span>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Knowledge Leakage</div>
+    <p>The entire redirect function &mdash; <code>validatePath</code>, <code>parsePath</code>, <code>buildQueryString</code>, <code>buildRedirectUrl</code>, <code>redirect301</code>, <code>notFound</code>, and <code>handler</code> &mdash; exists in two independent copies:</p>
+    <ul>
+      <li><code>functions/redirect.js</code> &mdash; used by tests</li>
+      <li><code>cloudformation/template.yaml</code> FunctionCode &mdash; the actually deployed version</li>
+    </ul>
+    <p>The only difference is the KVS ID initialization (<code>'KVS_ARN_PLACEHOLDER'</code> vs <code>'${RedirectKVS.Id}'</code>). This is <strong>functional coupling</strong> in its most dangerous form: duplicated implementation with no explicit integration point.</p>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Complexity Impact</div>
+    <p>Tests exercise <code>functions/redirect.js</code>, not the CloudFormation inline code. Tests can pass while the deployed function has a bug (or lacks a fix). The cause-and-effect relationship is hidden: <em>"I changed the code and the tests pass, but production still behaves incorrectly."</em></p>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Cascading Changes</div>
+    <p>Every change to redirect logic requires editing two files:</p>
+    <ul>
+      <li>Adding a new redirect type (e.g., temporary 302 redirects)</li>
+      <li>Modifying path validation rules</li>
+      <li>Changing cache headers</li>
+      <li>Fixing a bug in wildcard URL construction</li>
+    </ul>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Recommendation</div>
+    <div class="recommendation">
+      <p>Extract the redirect function to a single source file and inject it into the CloudFormation template during deployment. The <code>deploy.sh</code> script can read <code>functions/redirect.js</code>, substitute the KVS placeholder, and inject it into the template before deployment. Tests continue to run against the source file.</p>
+      <p class="tradeoff">Trade-off: Adds a build step. Worth it because it eliminates a silent failure mode where tests and production diverge.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ISSUE 2 ============ -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2>Duplicated Validation Rules (Wildcard Convention)</h2>
+      <div class="card-integration">UI <code>AddLinkDialog.tsx</code> &#8596; CreateLink Lambda &#8596; CloudFront Function</div>
+    </div>
+    <span class="badge badge-minor">Minor</span>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Knowledge Leakage</div>
+    <p>Three components independently implement knowledge of the wildcard redirect convention (<code>/*</code> suffix) and link validation rules:</p>
+    <div class="table-wrap">
+    <table class="val-table">
+      <thead>
+        <tr><th>Rule</th><th>UI</th><th>CreateLink Lambda</th><th>CloudFront Function</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Key pattern</td><td><code>/^[a-zA-Z0-9_-]+$/</code></td><td><code>/^[a-zA-Z0-9_-]+$/</code></td><td>N/A</td></tr>
+        <tr><td>Key max length</td><td>128</td><td>128</td><td>N/A</td></tr>
+        <tr><td>URL pattern</td><td><code>/^https?://...</code></td><td><code>/^https?://...</code></td><td>N/A</td></tr>
+        <tr><td>URL max length</td><td>1024</td><td>1024</td><td>N/A</td></tr>
+        <tr><td>Wildcard strip</td><td><code>value.endsWith('/*')</code></td><td><code>value.endsWith('/*')</code></td><td><code>target.endsWith('/*')</code></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>The wildcard convention is <strong>implicit shared knowledge</strong> &mdash; not defined in a contract or schema.</p>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Cascading Changes</div>
+    <ul>
+      <li>Changing the wildcard convention requires updating three components across two runtimes</li>
+      <li>Adding a new redirect type (e.g., regex-based) would touch all three</li>
+      <li>Changing validation rules requires syncing the regex in both UI and Lambda</li>
+    </ul>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Recommendation</div>
+    <div class="recommendation">
+      <p>Acceptable technical debt given low volatility. The backend Lambda validation is authoritative; the UI validation is a UX convenience. If redirect types expand, consider storing the type explicitly in DynamoDB (<code>{ key, value, type: "exact"|"wildcard" }</code>) rather than encoding it in the value string.</p>
+      <p class="tradeoff">Trade-off: Only worth doing if the redirect model actually needs to evolve.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ISSUE 3 ============ -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h2>CRUD Lambda Code Inline in CloudFormation</h2>
+      <div class="card-integration">ListLinks, CreateLink, DeleteLink Lambdas embedded in <code>template.yaml</code></div>
+    </div>
+    <span class="badge badge-minor">Minor</span>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Knowledge Leakage</div>
+    <p>Three Lambda functions containing application logic (validation, DynamoDB queries, error handling) are defined as inline <code>ZipFile</code> code within the 958-line CloudFormation template. This co-locates application concerns with infrastructure concerns.</p>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Complexity Impact</div>
+    <p>The template serves dual purposes: infrastructure definition and application code host. Unlike the redirect function (which has a separate testable copy), the CRUD Lambda code exists <strong>only</strong> in the CloudFormation template.</p>
+  </div>
+
+  <div class="card-section">
+    <div class="section-label">Recommendation</div>
+    <div class="recommendation">
+      <p>For this size and volatility, inline Lambdas are pragmatic. If the CRUD logic grows more complex, extract the Lambda code to separate files (like the KVS sync Lambda already is) and reference them via <code>S3Bucket</code>/<code>S3Key</code>.</p>
+      <p class="tradeoff">Trade-off: Extraction adds deployment complexity. The current approach is simpler. Only extract if Lambda code grows beyond simple CRUD.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SUMMARY ============ -->
+<div class="summary">
+  <h2>Summary</h2>
+  <p>This is a well-structured project for its scope. The system's overall low volatility (personal URL shortener, generic subdomain) means the identified coupling imbalances are unlikely to cause active pain.</p>
+  <p>The most actionable issue is the <strong>duplicated redirect function code</strong>, which creates a silent failure mode where tests and production can diverge &mdash; worth fixing regardless of volatility because it undermines test reliability.</p>
+  <p>The validation rule duplication and inline Lambda code are standard pragmatic trade-offs for a single-person, low-volatility project. They would become more significant if the system's scope expanded (e.g., multi-tenant, additional redirect types, team growth).</p>
+</div>
+
+</body>
+</html>
